@@ -41,6 +41,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         return;
       }
 
+      // Clear any previous errors
+      ref.read(authControllerProvider.notifier).clearError();
+
       await ref.read(authControllerProvider.notifier).register(
             _usernameController.text,
             _emailController.text,
@@ -52,15 +55,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         if (authState.isAuthenticated) {
           context.go('/');
         } else if (authState.error != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(authState.error!),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
+          _showErrorDialog(authState.error!);
         }
       }
     }
+  }
+
+  void _showErrorDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          Icons.error_outline,
+          color: Theme.of(context).colorScheme.error,
+          size: 48,
+        ),
+        title: const Text('Registration Failed'),
+        content: Text(error),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

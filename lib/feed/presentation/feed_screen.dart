@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/core/widgets/empty_state.dart';
+import 'package:travel_diary_frontend/core/widgets/gradient_header.dart';
 import 'package:travel_diary_frontend/core/widgets/retry_widget.dart';
 import 'package:travel_diary_frontend/core/widgets/skeleton_loader.dart';
 import 'package:travel_diary_frontend/feed/presentation/controllers/feed_controller.dart';
@@ -45,48 +46,67 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final feedState = ref.watch(feedControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Feed'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => context.push('/search'),
+      backgroundColor: Colors.grey[50],
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverAppBar(
+            floating: true,
+            pinned: true,
+            expandedHeight: 120,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            flexibleSpace: FlexibleSpaceBar(
+              background: GradientHeader(
+                title: 'Explore',
+                subtitle: '${feedState.posts.length} ${feedState.posts.length == 1 ? 'post' : 'posts'} from travelers',
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () => context.push('/search'),
+                  ),
+                ],
+              ),
+            ),
           ),
+          _buildSliverBody(feedState),
         ],
       ),
-      body: _buildBody(feedState),
     );
   }
 
-  Widget _buildBody(FeedState state) {
+  Widget _buildSliverBody(FeedState state) {
     if (state.isLoading && state.posts.isEmpty) {
-      return ListView.builder(
-        itemCount: 3,
-        itemBuilder: (context, index) => const PostCardSkeleton(),
+      return SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => const PostCardSkeleton(),
+          childCount: 3,
+        ),
       );
     }
 
     if (state.error != null && state.posts.isEmpty) {
-      return RetryWidget(
-        message: state.error!,
-        onRetry: _onRefresh,
+      return SliverFillRemaining(
+        child: RetryWidget(
+          message: state.error!,
+          onRetry: _onRefresh,
+        ),
       );
     }
 
     if (state.posts.isEmpty) {
-      return const EmptyState(
-        icon: Icons.explore_outlined,
-        title: 'No Posts Yet',
-        message: 'Follow travelers to see their adventures here',
+      return const SliverFillRemaining(
+        child: EmptyState(
+          icon: Icons.explore_outlined,
+          title: 'No Posts Yet',
+          message: 'Follow travelers to see their adventures here',
+        ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _onRefresh,
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: state.posts.length + (state.isLoading ? 1 : 0),
-        itemBuilder: (context, index) {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
           if (index >= state.posts.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
@@ -103,23 +123,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               ref.read(feedControllerProvider.notifier).likePost(post.step.id);
             },
             onComment: () {
-              // TODO: Open comments
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Comments coming soon!')),
               );
             },
             onShare: () {
-              // TODO: Share post
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Share coming soon!')),
               );
             },
             onUserTap: () {
-              // TODO: Navigate to user profile
               context.push('/profile/${post.user.id}');
             },
             onLocationTap: () {
-              // TODO: Show location on map
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Location: ${post.step.location.name}'),
@@ -128,6 +144,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             },
           );
         },
+        childCount: state.posts.length + (state.isLoading ? 1 : 0),
       ),
     );
   }

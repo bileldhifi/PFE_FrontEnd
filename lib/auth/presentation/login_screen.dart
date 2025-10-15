@@ -19,14 +19,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // Check if user is already authenticated when login screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthStatus();
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  Future<void> _checkAuthStatus() async {
+    try {
+      await ref.read(authControllerProvider.notifier).checkAuthStatus();
+      
+      if (mounted) {
+        final authState = ref.read(authControllerProvider);
+        if (authState.isAuthenticated) {
+          context.go('/');
+        }
+      }
+    } catch (e) {
+      // Ignore auth check errors on login screen
+      debugPrint('Auth check error: $e');
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState?.validate() ?? false) {
+      // Clear any previous errors
+      ref.read(authControllerProvider.notifier).clearError();
+      
       await ref.read(authControllerProvider.notifier).login(
             _emailController.text,
             _passwordController.text,
@@ -37,15 +65,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (authState.isAuthenticated) {
           context.go('/');
         } else if (authState.error != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(authState.error!),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
+          // Show error in a more prominent way
+          _showErrorDialog(authState.error!);
         }
       }
     }
+  }
+
+  void _showErrorDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          Icons.error_outline,
+          color: Theme.of(context).colorScheme.error,
+          size: 48,
+        ),
+        title: const Text('Login Failed'),
+        content: Text(error),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -123,11 +168,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 
                 const SizedBox(height: 12),
                 
+                // Error display
+                if (authState.error != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.error,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Theme.of(context).colorScheme.error,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            authState.error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onErrorContainer,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
                 // Forgot password
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => context.push('/auth/forgot-password'),
+                    onPressed: authState.isLoading ? null : () => context.push('/auth/forgot-password'),
                     child: const Text('Forgot Password?'),
                   ),
                 ),

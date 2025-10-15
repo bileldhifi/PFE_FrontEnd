@@ -27,7 +27,7 @@ class FakeData {
     User(
       id: '2',
       username: 'adventure_sarah',
-      email: 'sarah@example.com',
+      email: 'a',
       avatarUrl: 'https://i.pravatar.cc/150?img=5',
       createdAt: DateTime.now().subtract(const Duration(days: 400)),
       bio: 'Exploring one city at a time 🗺️',

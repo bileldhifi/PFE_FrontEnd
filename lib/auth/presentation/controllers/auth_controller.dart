@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_diary_frontend/auth/data/models/user.dart';
-import 'package:travel_diary_frontend/core/data/fake_data.dart';
+import 'package:travel_diary_frontend/auth/data/dtos/auth_response.dart';
+import 'package:travel_diary_frontend/auth/data/repo/auth_repository.dart';
 
 // Auth state
 class AuthState {
@@ -33,18 +34,18 @@ class AuthState {
 
 // Auth controller
 class AuthController extends StateNotifier<AuthState> {
-  AuthController() : super(AuthState());
+  final AuthRepository _authRepository;
+  
+  AuthController(this._authRepository) : super(AuthState());
 
   Future<void> login(String email, String password) async {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+      final authResponse = await _authRepository.login(email, password);
       
-      // For demo, accept any email/password
       state = state.copyWith(
-        user: FakeData.currentUser,
+        user: authResponse.user,
         isAuthenticated: true,
         isLoading: false,
       );
@@ -60,15 +61,10 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
-      
-      // Create new user
-      final newUser = User(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      final newUser = await _authRepository.register(
         username: username,
         email: email,
-        createdAt: DateTime.now(),
+        password: password,
       );
       
       state = state.copyWith(
@@ -84,19 +80,101 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> forgotPassword(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    
+    try {
+      await _authRepository.forgotPassword(email);
+      state = state.copyWith(
+        isLoading: false,
+        error: null, // Success - no error
+      );
+    } catch (e) {
+      state = state.copyWith(
+        error: e.toString(),
+        isLoading: false,
+      );
+    }
+  }
+
+  Future<void> resetPassword(String token, String newPassword) async {
+    state = state.copyWith(isLoading: true, error: null);
+    
+    try {
+      await _authRepository.resetPassword(token, newPassword);
+      state = state.copyWith(
+        isLoading: false,
+        error: null, // Success - no error
+      );
+    } catch (e) {
+      state = state.copyWith(
+        error: e.toString(),
+        isLoading: false,
+      );
+    }
+  }
+
   Future<void> logout() async {
+    await _authRepository.logout();
     state = AuthState();
   }
 
-  void checkAuthStatus() {
-    // In a real app, check for stored token
-    // For demo, start logged out to show login screen
-    state = AuthState();
+  Future<void> checkAuthStatus() async {
+    // Only set loading if we haven't checked yet
+    if (!state.isAuthenticated && state.user == null) {
+      state = state.copyWith(isLoading: true);
+    }
+    
+    try {
+      final isAuthenticated = await _authRepository.isAuthenticated();
+      
+      if (isAuthenticated) {
+        final user = await _authRepository.getCurrentUser();
+        state = state.copyWith(
+          user: user,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        );
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          isAuthenticated: false,
+          user: null,
+          error: null,
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(
+        error: e.toString(),
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+      );
+    }
+  }
+
+  Future<void> refreshUser() async {
+    try {
+      final user = await _authRepository.getCurrentUser();
+      state = state.copyWith(user: user);
+    } catch (e) {
+      // If refresh fails, user might need to login again
+      state = state.copyWith(
+        error: e.toString(),
+        isAuthenticated: false,
+      );
+    }
+  }
+
+  void clearError() {
+    state = state.copyWith(error: null);
   }
 }
 
 // Provider
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController();
+  final authRepository = AuthRepository();
+  return AuthController(authRepository);
 });
 

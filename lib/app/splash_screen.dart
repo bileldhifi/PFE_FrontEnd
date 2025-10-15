@@ -13,7 +13,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Wait a bit for splash effect then go to login
+    // Simple delay then go to login - auth will be checked on login screen
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         context.go('/auth/login');

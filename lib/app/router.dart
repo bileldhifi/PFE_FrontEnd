@@ -4,6 +4,7 @@ import 'package:travel_diary_frontend/auth/presentation/forgot_password_screen.d
 import 'package:travel_diary_frontend/auth/presentation/login_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/register_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
+import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/world_map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/profile_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
@@ -11,7 +12,7 @@ import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_diary_frontend/app/splash_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
-import 'package:travel_diary_frontend/trips/presentation/minimal_create_trip_screen.dart';
+import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/my_trips_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart';
 
@@ -51,6 +52,12 @@ class AppRouter {
           GoRoute(
             path: '/',
             pageBuilder: (context, state) => const NoTransitionPage(
+              child: HomeScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/feed',
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: FeedScreen(),
             ),
           ),
@@ -78,7 +85,7 @@ class AppRouter {
       // Create trip (must come before /trips/:id to avoid route conflict)
       GoRoute(
         path: '/trips/create',
-        builder: (context, state) => const MinimalCreateTripScreen(),
+        builder: (context, state) => const CreateTripScreen(),
       ),
 
       // Trip detail (outside shell to have its own app bar)
@@ -122,9 +129,9 @@ class ScaffoldWithBottomNav extends StatelessWidget {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Feed',
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.luggage_outlined),
@@ -148,7 +155,7 @@ class ScaffoldWithBottomNav extends StatelessWidget {
 
   int _calculateSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
-    if (location == '/') return 0;
+    if (location == '/' || location.startsWith('/home')) return 0;
     if (location.startsWith('/trips')) return 1;
     if (location.startsWith('/map')) return 2;
     if (location.startsWith('/profile')) return 3;
