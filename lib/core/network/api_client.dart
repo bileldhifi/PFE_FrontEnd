@@ -4,7 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
   static const String _baseUrl = 'http://localhost:8089/app-backend';
-  static const String _storageTokenKey = 'auth_token';
+  static const String _storageAccessTokenKey = 'access_token';
+  static const String _storageRefreshTokenKey = 'refresh_token';
   
   late final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -22,6 +23,7 @@ class ApiClient {
 
     // Add interceptors
     _dio.interceptors.add(_authInterceptor());
+    _dio.interceptors.add(_refreshTokenInterceptor());
     _dio.interceptors.add(_loggingInterceptor());
     _dio.interceptors.add(_errorInterceptor());
   }
@@ -30,7 +32,7 @@ class ApiClient {
   Interceptor _authInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: _storageTokenKey);
+        final token = await _storage.read(key: _storageAccessTokenKey);
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
@@ -39,8 +41,55 @@ class ApiClient {
       onError: (error, handler) async {
         // Handle 401 errors - token expired
         if (error.response?.statusCode == 401) {
-          await _storage.delete(key: _storageTokenKey);
+          await clearTokens();
           // You can navigate to login screen here if needed
+        }
+        handler.next(error);
+      },
+    );
+  }
+
+  // Refresh token interceptor
+  Interceptor _refreshTokenInterceptor() {
+    return InterceptorsWrapper(
+      onError: (error, handler) async {
+        if (error.response?.statusCode == 401) {
+          // Token expired, try to refresh
+          try {
+            final refreshToken = await getRefreshToken();
+            if (refreshToken != null) {
+              // Try to refresh the token
+              final refreshResponse = await Dio().post(
+                '$_baseUrl/auth/refresh',
+                data: {'refreshToken': refreshToken},
+                options: Options(
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                  },
+                ),
+              );
+
+              if (refreshResponse.statusCode == 200 && refreshResponse.data != null) {
+                final newAccessToken = refreshResponse.data['accessToken'] as String;
+                final newRefreshToken = refreshResponse.data['refreshToken'] as String;
+
+                // Save new tokens
+                await saveTokens(newAccessToken, newRefreshToken);
+
+                // Retry the original request with new token
+                final options = error.requestOptions;
+                options.headers['Authorization'] = 'Bearer $newAccessToken';
+
+                final response = await _dio.fetch(options);
+                handler.resolve(response);
+                return;
+              }
+            }
+          } catch (e) {
+            // Refresh failed, clear tokens and continue with error
+            await clearTokens();
+          }
         }
         handler.next(error);
       },
@@ -97,16 +146,34 @@ class ApiClient {
   }
 
   // Token management methods
-  Future<void> saveToken(String token) async {
-    await _storage.write(key: _storageTokenKey, value: token);
+  Future<void> saveTokens(String accessToken, String refreshToken) async {
+    await _storage.write(key: _storageAccessTokenKey, value: accessToken);
+    await _storage.write(key: _storageRefreshTokenKey, value: refreshToken);
+  }
+
+  Future<String?> getAccessToken() async {
+    return await _storage.read(key: _storageAccessTokenKey);
+  }
+
+  Future<String?> getRefreshToken() async {
+    return await _storage.read(key: _storageRefreshTokenKey);
   }
 
   Future<String?> getToken() async {
-    return await _storage.read(key: _storageTokenKey);
+    return await getAccessToken(); // For backward compatibility
+  }
+
+  Future<void> saveToken(String token) async {
+    await _storage.write(key: _storageAccessTokenKey, value: token);
+  }
+
+  Future<void> clearTokens() async {
+    await _storage.delete(key: _storageAccessTokenKey);
+    await _storage.delete(key: _storageRefreshTokenKey);
   }
 
   Future<void> clearToken() async {
-    await _storage.delete(key: _storageTokenKey);
+    await clearTokens(); // For backward compatibility
   }
 
   // HTTP methods

@@ -8,6 +8,7 @@ part 'auth_response.g.dart';
 class AuthResponse with _$AuthResponse {
   const factory AuthResponse({
     required String accessToken,
+    String? refreshToken, // Make optional for backward compatibility
     required User user,
   }) = _AuthResponse;
 

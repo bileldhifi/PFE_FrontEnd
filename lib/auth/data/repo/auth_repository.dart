@@ -24,8 +24,13 @@ class AuthRepository {
       if (response.statusCode == 200 && response.data != null) {
         final authResponse = AuthResponse.fromJson(response.data!);
         
-        // Save token to secure storage
-        await _apiClient.saveToken(authResponse.accessToken);
+        // Save tokens to secure storage
+        if (authResponse.refreshToken != null) {
+          await _apiClient.saveTokens(authResponse.accessToken, authResponse.refreshToken!);
+        } else {
+          // Fallback to old method if refresh token is not available
+          await _apiClient.saveToken(authResponse.accessToken);
+        }
         
         return authResponse;
       } else {
@@ -178,10 +183,46 @@ class AuthRepository {
     return token != null && token.isNotEmpty;
   }
 
+  /// Refresh access token using refresh token
+  /// Returns new AuthResponse with fresh tokens
+  Future<AuthResponse> refreshToken() async {
+    try {
+      final refreshToken = await _apiClient.getRefreshToken();
+      if (refreshToken == null) {
+        throw Exception('No refresh token available');
+      }
+
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        final authResponse = AuthResponse.fromJson(response.data!);
+
+        // Save new tokens
+        if (authResponse.refreshToken != null) {
+          await _apiClient.saveTokens(authResponse.accessToken, authResponse.refreshToken!);
+        } else {
+          await _apiClient.saveToken(authResponse.accessToken);
+        }
+
+        return authResponse;
+      } else {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          error: 'Token refresh failed: Invalid response',
+        );
+      }
+    } on DioException catch (e) {
+      throw _handleAuthError(e);
+    }
+  }
+
   /// Logout user
-  /// Clears stored token
+  /// Clears stored tokens
   Future<void> logout() async {
-    await _apiClient.clearToken();
+    await _apiClient.clearTokens();
   }
 
   /// Handle authentication errors
