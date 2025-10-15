@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/auth/presentation/forgot_password_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/login_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/register_screen.dart';
+import 'package:travel_diary_frontend/auth/presentation/change_password_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/world_map_screen.dart';
@@ -42,6 +43,10 @@ class AppRouter {
       GoRoute(
         path: '/auth/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/auth/change-password',
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
 
       // Main app with bottom navigation

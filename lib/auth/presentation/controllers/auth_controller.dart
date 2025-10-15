@@ -129,9 +129,10 @@ class AuthController extends StateNotifier<AuthState> {
       final isAuthenticated = await _authRepository.isAuthenticated();
       
       if (isAuthenticated) {
-        final user = await _authRepository.getCurrentUser();
+        // For now, just set as authenticated without fetching user details
+        // TODO: Implement getCurrentUser endpoint in backend or use cached user data
         state = state.copyWith(
-          user: user,
+          user: null, // Will be set when user logs in
           isAuthenticated: true,
           isLoading: false,
           error: null,
@@ -145,11 +146,16 @@ class AuthController extends StateNotifier<AuthState> {
         );
       }
     } catch (e) {
+      // If there's an error (like 403 for expired token), clear token and treat as unauthenticated
+      if (e.toString().contains('403') || e.toString().contains('Unauthorized')) {
+        await _authRepository.logout(); // Clear expired token
+      }
+      
       state = state.copyWith(
-        error: e.toString(),
         isLoading: false,
         isAuthenticated: false,
         user: null,
+        error: null, // Don't show auth errors on startup
       );
     }
   }

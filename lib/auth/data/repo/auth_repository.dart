@@ -4,6 +4,7 @@ import '../dtos/login_request.dart';
 import '../dtos/auth_response.dart';
 import '../dtos/register_request.dart';
 import '../dtos/forgot_password_request.dart';
+import '../dtos/change_password_request.dart';
 import '../models/user.dart';
 
 class AuthRepository {
@@ -142,6 +143,34 @@ class AuthRepository {
     }
   }
 
+  /// Change password for authenticated user
+  /// Requires authentication
+  Future<String> changePassword(String currentPassword, String newPassword) async {
+    try {
+      final request = ChangePasswordRequest(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+      final response = await _apiClient.put<String>(
+        '/auth/change-password',
+        data: request.toJson(),
+      );
+
+      if (response.statusCode == 200 && response.data != null) {
+        // Backend returns a plain string, not JSON
+        return response.data!;
+      } else {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          error: 'Failed to change password',
+        );
+      }
+    } on DioException catch (e) {
+      throw _handleAuthError(e);
+    }
+  }
+
   /// Check if user is authenticated
   /// Returns true if valid token exists
   Future<bool> isAuthenticated() async {
@@ -163,10 +192,13 @@ class AuthRepository {
       case 401:
         return Exception('Authentication failed. Please check your credentials.');
       case 403:
-        // This could be CORS or login failure - check if it's from login endpoint
+        // This could be CORS, login failure, or wrong current password - check the endpoint
         final path = e.requestOptions.path;
         if (path.contains('/auth/login')) {
           return Exception('Invalid email or password. Please check your credentials and try again.');
+        }
+        if (path.contains('/auth/change-password')) {
+          return Exception('Current password is incorrect. Please check your current password and try again.');
         }
         return Exception('Access forbidden. This might be a CORS issue if running on web. Try running on a mobile device or emulator.');
       case 409:

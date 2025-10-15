@@ -185,6 +185,7 @@ class ProfileScreen extends ConsumerWidget {
 
             const Divider(height: 32),
 
+
             _buildMenuItem(
               context,
               icon: Icons.logout,

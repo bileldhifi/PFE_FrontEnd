@@ -28,7 +28,9 @@ class SettingsScreen extends ConsumerWidget {
             icon: Icons.lock_outlined,
             title: 'Password',
             subtitle: 'Change your password',
-            onTap: () {},
+            onTap: () {
+              context.push('/auth/change-password');
+            },
           ),
 
           const Divider(height: 32),
