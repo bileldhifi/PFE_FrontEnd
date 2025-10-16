@@ -8,11 +8,13 @@ import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/world_map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/profile_screen.dart';
+import 'package:travel_diary_frontend/profile/presentation/edit_profile_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
 import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_diary_frontend/app/splash_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
+import 'package:travel_diary_frontend/profile/presentation/controllers/profile_controller.dart';
 import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/my_trips_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart';
@@ -110,6 +112,19 @@ class AppRouter {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) {
+          // Get current user from provider
+          final container = ProviderScope.containerOf(context);
+          final currentUser = container.read(currentUserProvider);
+          if (currentUser == null) {
+            // Redirect to login if no user
+            return const LoginScreen();
+          }
+          return EditProfileScreen(user: currentUser);
+        },
       ),
     ],
   );

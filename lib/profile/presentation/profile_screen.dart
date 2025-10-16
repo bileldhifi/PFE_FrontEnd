@@ -5,14 +5,34 @@ import 'package:travel_diary_frontend/app/theme/colors.dart';
 import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
 import 'package:travel_diary_frontend/core/data/fake_data.dart';
 import 'package:travel_diary_frontend/core/widgets/app_avatar.dart';
+import 'controllers/profile_controller.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load current user profile when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(profileControllerProvider.notifier).loadCurrentUser();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
-    final user = authState.user ?? FakeData.currentUser;
+    final profileState = ref.watch(profileControllerProvider);
+    
+    // Use real user data if available, fallback to auth user, then fake data
+    final user = profileState.currentUser ?? 
+                 authState.user ?? 
+                 FakeData.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -24,7 +44,13 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(profileControllerProvider.notifier).refreshProfile();
+        },
+        child: profileState.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 24),
@@ -113,9 +139,7 @@ class ProfileScreen extends ConsumerWidget {
                 children: [
                   ElevatedButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Edit profile coming soon!')),
-                      );
+                      context.push('/profile/edit');
                     },
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('Edit Profile'),
@@ -202,6 +226,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 32),
           ],
         ),
+      ),
       ),
     );
   }
