@@ -17,3 +17,4 @@ echo "📝 Next steps:"
 echo "1. Make sure your Spring Boot backend is running on http://localhost:8089"
 echo "2. Run 'flutter run' to test the authentication flow"
 echo "3. Test login with valid credentials from your backend"
+

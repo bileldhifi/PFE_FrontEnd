@@ -8,7 +8,6 @@ class UpdateProfileRequest with _$UpdateProfileRequest {
   const factory UpdateProfileRequest({
     required String username,
     String? bio,
-    String? avatarUrl,
     @Default('FRIENDS') String defaultVisibility,
   }) = _UpdateProfileRequest;
 

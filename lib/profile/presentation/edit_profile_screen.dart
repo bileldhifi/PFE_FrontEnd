@@ -1,12 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../app/theme/colors.dart';
 import '../../auth/data/models/user.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/app_avatar.dart';
 import 'controllers/profile_controller.dart';
+import '../data/repo/avatar_repository.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   final User user;
@@ -24,9 +27,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
+  final _avatarRepository = AvatarRepository();
+  final _imagePicker = ImagePicker();
   
   String _selectedVisibility = 'FRIENDS';
-  String? _selectedAvatarUrl;
+  File? _selectedImageFile;
+  String? _currentAvatarUrl;
+  bool _removeAvatarRequested = false;
 
   @override
   void initState() {
@@ -38,7 +45,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _usernameController.text = widget.user.username;
     _bioController.text = widget.user.bio ?? '';
     _selectedVisibility = widget.user.defaultVisibility;
-    _selectedAvatarUrl = widget.user.avatarUrl;
+    _currentAvatarUrl = _buildFullAvatarUrl(widget.user.avatarUrl);
+  }
+
+  String? _buildFullAvatarUrl(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) return null;
+    
+    // If it's already a full URL, return as is
+    if (avatarUrl.startsWith('http')) return avatarUrl;
+    
+    // If it's a relative path, convert to full URL
+    if (avatarUrl.startsWith('/')) {
+      return 'http://localhost:8089/app-backend$avatarUrl';
+    }
+    
+    // If it doesn't start with /, add it
+    return 'http://localhost:8089/app-backend/$avatarUrl';
   }
 
   @override
@@ -52,17 +74,77 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       ref.read(profileControllerProvider.notifier).clearError();
       
-      await ref.read(profileControllerProvider.notifier).updateProfile(
-        username: _usernameController.text,
-        bio: _bioController.text.isNotEmpty ? _bioController.text : null,
-        avatarUrl: _selectedAvatarUrl,
-        defaultVisibility: _selectedVisibility,
-      );
-      
-      if (mounted) {
-        final profileState = ref.read(profileControllerProvider);
-        if (profileState.error == null && profileState.successMessage != null) {
-          _showSuccessDialog();
+      try {
+        print('Starting profile save...');
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+        
+        // Handle avatar changes
+        if (_removeAvatarRequested) {
+          // Remove avatar from backend
+          try {
+            await _avatarRepository.deleteAvatar();
+          } catch (avatarError) {
+            // If avatar removal fails, show error and return
+            if (mounted) {
+              Navigator.of(context).pop(); // Close loading dialog
+              _showErrorDialog('Failed to remove avatar: ${avatarError.toString()}');
+              return;
+            }
+          }
+        } else if (_selectedImageFile != null) {
+          // Upload new avatar
+          try {
+            final newAvatarUrl = await _avatarRepository.uploadAvatar(_selectedImageFile!);
+            _currentAvatarUrl = newAvatarUrl;
+          } catch (avatarError) {
+            // If avatar upload fails, show error and return
+            if (mounted) {
+              Navigator.of(context).pop(); // Close loading dialog
+              _showErrorDialog('Failed to upload avatar: ${avatarError.toString()}');
+              return;
+            }
+          }
+        }
+        
+        // Update profile
+        print('Updating profile...');
+        await ref.read(profileControllerProvider.notifier).updateProfile(
+          username: _usernameController.text,
+          bio: _bioController.text.isNotEmpty ? _bioController.text : null,
+          defaultVisibility: _selectedVisibility,
+        );
+        print('Profile updated successfully');
+        
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+        
+        // Show success and go back
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          // Go back to profile screen
+          context.pop();
+        }
+      } catch (e) {
+        print('Error during profile save: $e');
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+          _showErrorDialog(e.toString());
         }
       }
     }
@@ -148,19 +230,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               children: [
                 const SizedBox(height: 20),
                 
-                // Profile picture section
+                // Avatar preview section
                 Center(
                   child: Column(
                     children: [
                       AppAvatar(
-                        imageUrl: _selectedAvatarUrl,
-                        name: _usernameController.text,
-                        size: 100,
+                        imageUrl: _removeAvatarRequested ? null : (_selectedImageFile != null ? null : (_currentAvatarUrl ?? _buildFullAvatarUrl(widget.user.avatarUrl))),
+                        imageFile: _removeAvatarRequested ? null : _selectedImageFile,
+                        name: widget.user.username,
+                        size: 120,
                         showBorder: true,
                       ),
                       const SizedBox(height: 12),
+                      Text(
+                        'Profile Picture',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       TextButton.icon(
-                        onPressed: () => _showAvatarPicker(),
+                        onPressed: _showImagePicker,
                         icon: const Icon(Icons.camera_alt_outlined),
                         label: const Text('Change Photo'),
                       ),
@@ -322,65 +412,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
   }
 
-  void _showAvatarPicker() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Choose Avatar',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            
-            // Preset avatars
-            GridView.builder(
-              shrinkWrap: true,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: 12,
-              itemBuilder: (context, index) {
-                final avatarUrl = 'https://i.pravatar.cc/150?img=${index + 1}';
-                final isSelected = _selectedAvatarUrl == avatarUrl;
-                
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedAvatarUrl = avatarUrl;
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected 
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                    child: AppAvatar(
-                      imageUrl: avatarUrl,
-                      name: '',
-                      size: 60,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   void _showDeleteAccountDialog() {
     showDialog(
@@ -418,4 +450,115 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
     );
   }
+
+  Future<void> _showImagePicker() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose from Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            // Only show remove option if there's an existing avatar and not already requested to remove
+            if (_currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty && !_removeAvatarRequested)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Remove Avatar', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removeAvatarPreview();
+                },
+              ),
+            // Show restore option if removal was requested
+            if (_removeAvatarRequested)
+              ListTile(
+                leading: const Icon(Icons.restore, color: Colors.green),
+                title: const Text('Restore Avatar', style: TextStyle(color: Colors.green)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _restoreAvatarPreview();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImageFile = File(pickedFile.path);
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image selected! Press Save to upload.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting image: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removeAvatarPreview() {
+    setState(() {
+      _removeAvatarRequested = true;
+      _selectedImageFile = null; // Clear any selected image
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Avatar will be removed when you save changes.'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _restoreAvatarPreview() {
+    setState(() {
+      _removeAvatarRequested = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Avatar restored.'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
 }

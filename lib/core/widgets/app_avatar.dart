@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:travel_diary_frontend/app/theme/colors.dart';
 
 class AppAvatar extends StatelessWidget {
   final String? imageUrl;
+  final File? imageFile;
   final String name;
   final double size;
   final bool showBorder;
@@ -12,6 +14,7 @@ class AppAvatar extends StatelessWidget {
   const AppAvatar({
     super.key,
     this.imageUrl,
+    this.imageFile,
     required this.name,
     this.size = 40,
     this.showBorder = false,
@@ -35,14 +38,20 @@ class AppAvatar extends StatelessWidget {
             : null,
       ),
       child: ClipOval(
-        child: imageUrl != null && imageUrl!.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: imageUrl!,
+        child: imageFile != null
+            ? Image.file(
+                imageFile!,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => _buildPlaceholder(initials),
-                errorWidget: (context, url, error) => _buildPlaceholder(initials),
+                errorBuilder: (context, error, stackTrace) => _buildPlaceholder(initials),
               )
-            : _buildPlaceholder(initials),
+            : imageUrl != null && imageUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: imageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => _buildPlaceholder(initials),
+                    errorWidget: (context, url, error) => _buildPlaceholder(initials),
+                  )
+                : _buildPlaceholder(initials),
       ),
     );
 

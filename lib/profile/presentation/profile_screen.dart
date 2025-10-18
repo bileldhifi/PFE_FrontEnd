@@ -20,8 +20,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.initState();
     // Load current user profile when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(profileControllerProvider.notifier).loadCurrentUser();
+ref.read(profileControllerProvider.notifier).loadCurrentUser();
     });
+  }
+
+  String? _buildFullAvatarUrl(String? avatarUrl) {
+    if (avatarUrl == null || avatarUrl.isEmpty) return null;
+    
+    // If it's already a full URL, return as is
+    if (avatarUrl.startsWith('http')) return avatarUrl;
+    
+    // If it's a relative path, convert to full URL
+    if (avatarUrl.startsWith('/')) {
+      return 'http://localhost:8089/app-backend$avatarUrl';
+    }
+    
+    // If it doesn't start with /, add it
+    return 'http://localhost:8089/app-backend/$avatarUrl';
   }
 
   @override
@@ -57,7 +72,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
             // Avatar and basic info
             AppAvatar(
-              imageUrl: user.avatarUrl,
+              imageUrl: _buildFullAvatarUrl(user.avatarUrl),
               name: user.username,
               size: 100,
               showBorder: true,

@@ -89,7 +89,6 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<void> updateProfile({
     required String username,
     String? bio,
-    String? avatarUrl,
     String defaultVisibility = 'FRIENDS',
   }) async {
     state = state.copyWith(isUpdating: true, error: null, successMessage: null);
@@ -98,7 +97,6 @@ class ProfileController extends StateNotifier<ProfileState> {
       final request = UpdateProfileRequest(
         username: username,
         bio: bio,
-        avatarUrl: avatarUrl,
         defaultVisibility: defaultVisibility,
       );
 
