@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/app/theme/colors.dart';
+import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
 import 'package:travel_diary_frontend/core/utils/date_time.dart';
 import 'package:travel_diary_frontend/core/widgets/empty_state.dart';
 import 'package:travel_diary_frontend/core/widgets/retry_widget.dart';
@@ -27,6 +28,29 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
   @override
   Widget build(BuildContext context) {
     final tripState = ref.watch(tripListControllerProvider);
+    final authState = ref.watch(authControllerProvider);
+
+    // Show login prompt if user is not authenticated
+    if (!authState.isAuthenticated || authState.user == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('My Trips'),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.login, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Please log in to view your trips',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -289,37 +313,71 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
                     
                     const SizedBox(height: 10),
                     
-                    // Date with enhanced styling
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.calendar_today,
-                            size: 13,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            DateTimeUtils.formatDateRange(trip.startDate, trip.endDate),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
+                    // Date and Status with enhanced styling
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
                             ),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.calendar_today,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                DateTimeUtils.formatDateRange(trip.startDate, trip.endDate),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Status indicator
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: trip.endDate == null 
+                                ? Colors.green.withOpacity(0.8)
+                                : Colors.blue.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                trip.endDate == null ? Icons.play_circle : Icons.check_circle,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                trip.endDate == null ? 'Active' : 'Completed',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                     
                     const SizedBox(height: 14),
@@ -434,24 +492,61 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
       onSelected: (value) async {
         if (value == 'delete') {
           final confirmed = await _showDeleteDialog(context, trip.title);
-              if (confirmed == true && context.mounted) {
-                await ref.read(tripListControllerProvider.notifier).deleteTrip(trip.id);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+          if (confirmed == true && context.mounted) {
+            await ref.read(tripListControllerProvider.notifier).deleteTrip(trip.id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('${trip.title} deleted'),
                   behavior: SnackBarBehavior.floating,
                 ),
-                  );
-                }
+              );
+            }
+          }
+        } else if (value == 'end') {
+          final confirmed = await _showEndTripDialog(context, trip.title);
+          if (confirmed == true && context.mounted) {
+            try {
+              await ref.read(tripListControllerProvider.notifier).endTrip(trip.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${trip.title} ended successfully'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: Colors.green,
+                  ),
+                );
               }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to end trip: $e'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          }
         } else if (value == 'edit') {
-              ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Edit coming soon!')),
           );
         }
       },
       itemBuilder: (context) => [
+        if (trip.endDate == null) // Only show end trip option for active trips
+          const PopupMenuItem(
+            value: 'end',
+            child: Row(
+              children: [
+                Icon(Icons.stop_circle_outlined, size: 18, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('End Trip', style: TextStyle(color: Colors.orange)),
+              ],
+            ),
+          ),
         const PopupMenuItem(
           value: 'edit',
           child: Row(
@@ -492,6 +587,28 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _showEndTripDialog(BuildContext context, String tripTitle) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('End Trip'),
+        content: Text('Are you sure you want to end "$tripTitle"? This will mark the trip as completed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('End Trip'),
           ),
         ],
       ),

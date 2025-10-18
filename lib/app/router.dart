@@ -116,9 +116,10 @@ class AppRouter {
       GoRoute(
         path: '/profile/edit',
         builder: (context, state) {
-          // Get current user from provider
+          // Get current user from auth controller
           final container = ProviderScope.containerOf(context);
-          final currentUser = container.read(currentUserProvider);
+          final authState = container.read(authControllerProvider);
+          final currentUser = authState.user;
           if (currentUser == null) {
             // Redirect to login if no user
             return const LoginScreen();

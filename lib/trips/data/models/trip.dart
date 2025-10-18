@@ -16,6 +16,12 @@ class Trip with _$Trip {
     required String createdBy,
     required DateTime createdAt,
     String? description,
+    // Additional fields for enhanced UI (stored locally)
+    String? location,
+    String? tripType,
+    String? budgetRange,
+    String? budget,
+    List<String>? travelBuddies,
   }) = _Trip;
 
   factory Trip.fromJson(Map<String, dynamic> json) => _$TripFromJson(json);

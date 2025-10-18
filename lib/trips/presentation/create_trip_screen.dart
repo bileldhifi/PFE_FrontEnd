@@ -149,9 +149,39 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
   }
 
   void _addTravelBuddy() {
-    if (_buddyController.text.trim().isNotEmpty) {
+    final buddyName = _buddyController.text.trim();
+    if (buddyName.isNotEmpty) {
+      // Validate buddy name
+      if (buddyName.length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Buddy name must be at least 2 characters')),
+        );
+        return;
+      }
+      
+      if (buddyName.length > 50) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Buddy name must be less than 50 characters')),
+        );
+        return;
+      }
+      
+      if (_travelBuddies.contains(buddyName)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This buddy is already added')),
+        );
+        return;
+      }
+      
+      if (_travelBuddies.length >= 10) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Maximum 10 travel buddies allowed')),
+        );
+        return;
+      }
+      
       setState(() {
-        _travelBuddies.add(_buddyController.text.trim());
+        _travelBuddies.add(buddyName);
         _buddyController.clear();
       });
     }
@@ -165,9 +195,37 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
 
   Future<void> _createTrip() async {
     if (_formKey.currentState?.validate() ?? false) {
+      // Validate start date
       if (_startDate == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select a start date')),
+          const SnackBar(
+            content: Text('Please select a start date'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Validate end date if provided
+      if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('End date must be after start date'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Validate that start date is not too far in the past
+      final now = DateTime.now();
+      final daysDifference = now.difference(_startDate!).inDays;
+      if (daysDifference > 365) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Start date cannot be more than 1 year in the past'),
+            backgroundColor: Colors.red,
+          ),
         );
         return;
       }
@@ -176,52 +234,73 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
         _isLoading = true;
       });
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+      try {
+        // Create comprehensive description
+        final List<String> descriptionParts = [];
+        
+        if (_descriptionController.text.isNotEmpty) {
+          descriptionParts.add(_descriptionController.text);
+        }
+        
+        if (_locationController.text.isNotEmpty) {
+          descriptionParts.add('📍 Destination: ${_locationController.text}');
+        }
+        
+        descriptionParts.add('🏷️ Type: ${_tripType.toLowerCase()}');
+        descriptionParts.add('💰 Budget: ${_budgetRange.toLowerCase()}');
+        
+        if (_budgetController.text.isNotEmpty) {
+          descriptionParts.add('💵 Estimated: \$${_budgetController.text}');
+        }
+        
+        if (_travelBuddies.isNotEmpty) {
+          descriptionParts.add('👥 Travel Buddies: ${_travelBuddies.join(', ')}');
+        }
 
-      // Create comprehensive description
-      final List<String> descriptionParts = [];
-      
-      if (_descriptionController.text.isNotEmpty) {
-        descriptionParts.add(_descriptionController.text);
-      }
-      
-      if (_locationController.text.isNotEmpty) {
-        descriptionParts.add('📍 Destination: ${_locationController.text}');
-      }
-      
-      descriptionParts.add('🏷️ Type: ${_tripType.toLowerCase()}');
-      descriptionParts.add('💰 Budget: ${_budgetRange.toLowerCase()}');
-      
-      if (_budgetController.text.isNotEmpty) {
-        descriptionParts.add('💵 Estimated: \$${_budgetController.text}');
-      }
-      
-      if (_travelBuddies.isNotEmpty) {
-        descriptionParts.add('👥 Travel Buddies: ${_travelBuddies.join(', ')}');
-      }
+        // Prepare additional details
+        final additionalDetails = {
+          'description': descriptionParts.join('\n\n'),
+          'coverUrl': _coverImagePath,
+          'visibility': _visibility,
+          'tripType': _tripType,
+          'budgetRange': _budgetRange,
+          'budget': _budgetController.text.isNotEmpty ? _budgetController.text : null,
+          'location': _locationController.text.isNotEmpty ? _locationController.text : null,
+          'travelBuddies': _travelBuddies,
+          'startDate': _startDate?.toIso8601String(),
+          'endDate': _endDate?.toIso8601String(),
+        };
 
-      // Create trip
-      final newTrip = Trip(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: _nameController.text,
-        coverUrl: _coverImagePath ?? 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800',
-        startDate: _startDate!,
-        endDate: _endDate,
-        visibility: _visibility,
-        stats: const TripStats(),
-        createdBy: '1',
-        createdAt: DateTime.now(),
-        description: descriptionParts.join('\n\n'),
-      );
-
-      await ref.read(tripListControllerProvider.notifier).createTrip(newTrip);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Trip created successfully! 🎉')),
+        // Create trip with additional details
+        await ref.read(tripListControllerProvider.notifier).createTripWithDetails(
+          _nameController.text,
+          additionalDetails,
         );
-        context.pop();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Trip created successfully! 🎉'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          context.pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to create trip: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -376,9 +455,10 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          TextFormField(
                             controller: _nameController,
                             enabled: !_isLoading,
+                            validator: Validators.tripTitle,
                             decoration: InputDecoration(
                               hintText: 'e.g., Summer Adventure in Europe',
                               border: OutlineInputBorder(
@@ -422,10 +502,11 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          TextFormField(
                             controller: _descriptionController,
                             enabled: !_isLoading,
                             maxLines: 3,
+                            validator: (value) => Validators.maxLength(value, 500, fieldName: 'Description'),
                             decoration: InputDecoration(
                               hintText: 'Tell us about your adventure...',
                               border: OutlineInputBorder(
@@ -949,6 +1030,21 @@ class _CreateTripScreenState extends ConsumerState<CreateTripScreen> {
           prefixIcon: const Icon(Icons.attach_money),
           keyboardType: TextInputType.number,
           enabled: !_isLoading,
+          validator: (value) {
+            if (value != null && value.isNotEmpty) {
+              final budget = double.tryParse(value);
+              if (budget == null) {
+                return 'Please enter a valid number';
+              }
+              if (budget < 0) {
+                return 'Budget cannot be negative';
+              }
+              if (budget > 1000000) {
+                return 'Budget seems too high';
+              }
+            }
+            return null;
+          },
         ),
       ],
     );
