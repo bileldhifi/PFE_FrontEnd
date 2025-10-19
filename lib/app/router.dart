@@ -18,6 +18,7 @@ import 'package:travel_diary_frontend/profile/presentation/controllers/profile_c
 import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/my_trips_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart';
+import 'package:travel_diary_frontend/trips/presentation/track_point_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -101,6 +102,19 @@ class AppRouter {
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return TripDetailScreen(tripId: id);
+        },
+      ),
+
+      // Track points for a trip
+      GoRoute(
+        path: '/trips/:tripId/track-points',
+        builder: (context, state) {
+          final tripId = state.pathParameters['tripId']!;
+          final tripTitle = state.uri.queryParameters['title'] ?? 'Trip';
+          return TrackPointScreen(
+            tripId: tripId,
+            tripTitle: tripTitle,
+          );
         },
       ),
 

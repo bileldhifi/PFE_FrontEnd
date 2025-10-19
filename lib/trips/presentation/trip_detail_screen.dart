@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/core/utils/date_time.dart';
 import 'package:travel_diary_frontend/core/widgets/app_network_image.dart';
 import 'package:travel_diary_frontend/core/widgets/retry_widget.dart';
@@ -122,6 +123,13 @@ class TripDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 actions: [
+                  IconButton(
+                    icon: const Icon(Icons.location_on),
+                    onPressed: () {
+                      context.go('/trips/$tripId/track-points?title=${Uri.encodeComponent(trip.title)}');
+                    },
+                    tooltip: 'Track Points',
+                  ),
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'edit') {
