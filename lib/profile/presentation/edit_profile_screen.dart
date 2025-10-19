@@ -34,6 +34,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   File? _selectedImageFile;
   String? _currentAvatarUrl;
   bool _removeAvatarRequested = false;
+  bool _hasLoadedData = false; // Flag to prevent duplicate data loading
 
   @override
   void initState() {
@@ -46,6 +47,62 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _bioController.text = widget.user.bio ?? '';
     _selectedVisibility = widget.user.defaultVisibility;
     _currentAvatarUrl = _buildFullAvatarUrl(widget.user.avatarUrl);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Only load data once per screen lifecycle to prevent duplicate requests
+    if (!_hasLoadedData) {
+      final profileState = ref.read(profileControllerProvider);
+      if (profileState.currentUser == null) {
+        // Load fresh data from server
+        _loadUserData();
+      } else {
+        // Use cached data and mark as loaded
+        _updateFieldsFromProfile(profileState.currentUser!);
+        _hasLoadedData = true;
+      }
+    }
+  }
+
+  /// Load user data from server with proper error handling
+  Future<void> _loadUserData() async {
+    if (_hasLoadedData) return; // Prevent duplicate calls
+    
+    try {
+      await ref.read(profileControllerProvider.notifier).loadCurrentUser();
+      _hasLoadedData = true;
+      
+      // Update fields after successful load
+      final profileState = ref.read(profileControllerProvider);
+      if (profileState.currentUser != null) {
+        _updateFieldsFromProfile(profileState.currentUser!);
+      }
+    } catch (e) {
+      // Handle error gracefully - user can still edit with existing data
+      print('Failed to load fresh user data: $e');
+      // Mark as loaded to prevent retry loops, but keep existing data
+      _hasLoadedData = true;
+    }
+  }
+
+  void _updateFieldsFromProfile(User user) {
+    // Only update if the data has actually changed to avoid unnecessary rebuilds
+    if (_usernameController.text != user.username) {
+      _usernameController.text = user.username;
+    }
+    if (_bioController.text != (user.bio ?? '')) {
+      _bioController.text = user.bio ?? '';
+    }
+    if (_selectedVisibility != user.defaultVisibility) {
+      _selectedVisibility = user.defaultVisibility;
+    }
+    final newAvatarUrl = _buildFullAvatarUrl(user.avatarUrl);
+    if (_currentAvatarUrl != newAvatarUrl) {
+      _currentAvatarUrl = newAvatarUrl;
+    }
   }
 
   String? _buildFullAvatarUrl(String? avatarUrl) {
@@ -121,6 +178,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           defaultVisibility: _selectedVisibility,
         );
         print('Profile updated successfully');
+        
+        // Reset the loaded data flag so fresh data can be loaded next time
+        _hasLoadedData = false;
         
         // Close loading dialog
         if (mounted) {
@@ -200,6 +260,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final profileState = ref.watch(profileControllerProvider);
     
+    // Use current user from profile controller if available, otherwise fall back to widget.user
+    final currentUser = profileState.currentUser ?? widget.user;
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Profile'),
@@ -235,9 +298,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   child: Column(
                     children: [
                       AppAvatar(
-                        imageUrl: _removeAvatarRequested ? null : (_selectedImageFile != null ? null : (_currentAvatarUrl ?? _buildFullAvatarUrl(widget.user.avatarUrl))),
+                        imageUrl: _removeAvatarRequested ? null : (_selectedImageFile != null ? null : (_currentAvatarUrl ?? _buildFullAvatarUrl(currentUser.avatarUrl))),
                         imageFile: _removeAvatarRequested ? null : _selectedImageFile,
-                        name: widget.user.username,
+                        name: currentUser.username,
                         size: 120,
                         showBorder: true,
                       ),

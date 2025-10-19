@@ -20,8 +20,13 @@ class TrackPointRepository {
       );
       
       // Handle case where track point was skipped due to optimization
-      if (response.statusCode == 200 && response.data == null) {
-        return null;
+      if (response.statusCode == 200 && (response.data == null || response.data == '')) {
+        return null; // Point was skipped
+      }
+      
+      // Handle case where response.data might be a string instead of Map
+      if (response.data is String) {
+        throw Exception('Unexpected string response from server: ${response.data}');
       }
       
       return TrackPointResponse.fromJson(response.data);

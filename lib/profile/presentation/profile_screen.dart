@@ -20,7 +20,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.initState();
     // Load current user profile when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-ref.read(profileControllerProvider.notifier).loadCurrentUser();
+      ref.read(profileControllerProvider.notifier).loadCurrentUser();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh profile data when returning from edit screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(profileControllerProvider.notifier).loadCurrentUser();
     });
   }
 

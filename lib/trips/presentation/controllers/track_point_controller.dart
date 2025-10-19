@@ -114,7 +114,7 @@ class TrackPointController extends StateNotifier<TrackPointState> {
       } else {
         // Track point was skipped due to optimization
         state = state.copyWith(
-          successMessage: 'Track point added (optimized)',
+          successMessage: 'Track point skipped (too close to previous point)',
         );
       }
     } catch (e) {
