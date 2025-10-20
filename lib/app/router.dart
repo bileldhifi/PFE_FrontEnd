@@ -8,6 +8,7 @@ import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/world_map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/profile_screen.dart';
+import 'package:travel_diary_frontend/profile/presentation/modern_profile_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/edit_profile_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
 import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart';
@@ -84,7 +85,7 @@ class AppRouter {
           GoRoute(
             path: '/profile',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfileScreen(),
+              child: ModernProfileScreen(),
             ),
           ),
         ],
