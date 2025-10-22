@@ -6,8 +6,7 @@ import 'package:travel_diary_frontend/auth/presentation/register_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/change_password_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
-import 'package:travel_diary_frontend/map/presentation/world_map_screen.dart';
-import 'package:travel_diary_frontend/profile/presentation/profile_screen.dart';
+import 'package:travel_diary_frontend/map/presentation/map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/modern_profile_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/edit_profile_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
@@ -79,7 +78,7 @@ class AppRouter {
           GoRoute(
             path: '/map',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: WorldMapScreen(),
+              child: MapScreen(),
             ),
           ),
           GoRoute(
