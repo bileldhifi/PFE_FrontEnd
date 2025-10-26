@@ -126,7 +126,7 @@ class TripDetailScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.location_on),
                     onPressed: () {
-                      context.go('/trips/$tripId/track-points?title=${Uri.encodeComponent(trip.title)}');
+                      context.push('/trips/$tripId/track-points?title=${Uri.encodeComponent(trip.title)}');
                     },
                     tooltip: 'Track Points',
                   ),

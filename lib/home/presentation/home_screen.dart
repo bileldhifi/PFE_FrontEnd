@@ -2,18 +2,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/app/theme/colors.dart';
+import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
+import 'package:travel_diary_frontend/profile/presentation/controllers/profile_controller.dart';
 import 'package:travel_diary_frontend/core/data/fake_data.dart';
 import 'package:travel_diary_frontend/core/utils/date_time.dart';
 import 'package:travel_diary_frontend/core/widgets/app_network_image.dart';
 import 'package:travel_diary_frontend/trips/presentation/controllers/trip_list_controller.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load current user data when home screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserData();
+    });
+  }
+
+  Future<void> _loadUserData() async {
+    final authState = ref.read(authControllerProvider);
+    final profileState = ref.read(profileControllerProvider);
+    
+    // Only load if user is authenticated and profile data is not loaded
+    if (authState.isAuthenticated && profileState.currentUser == null) {
+      try {
+        await ref.read(profileControllerProvider.notifier).loadCurrentUser();
+      } catch (e) {
+        // Handle error gracefully - user can still use the app
+        print('Failed to load user data: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tripState = ref.watch(tripListControllerProvider);
-    final user = FakeData.currentUser;
+    final authState = ref.watch(authControllerProvider);
+    final profileState = ref.watch(profileControllerProvider);
+    
+    // Use profile controller's current user if available (most up-to-date),
+    // otherwise fall back to auth controller's user, then fake data
+    final user = profileState.currentUser ?? authState.user ?? FakeData.currentUser;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
