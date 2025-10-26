@@ -54,18 +54,27 @@ class MapTripController {
   /// Display a single trip route on the map
   Future<void> _displayTripRoute(Trip trip, int colorIndex) async {
     try {
+      print('Displaying trip route for: ${trip.title} (ID: ${trip.id})');
+      
       // Fetch track points for this trip
       final trackPoints = await _tripRouteRepository.getTripTrackPoints(trip.id);
       
-      if (trackPoints.isEmpty) return;
+      print('Fetched ${trackPoints.length} track points for trip ${trip.id}');
+      
+      if (trackPoints.isEmpty) {
+        print('No track points found for trip ${trip.id}');
+        return;
+      }
 
       final color = _tripColors[colorIndex % _tripColors.length];
       
       // Create polyline for the route
       await _createTripPolyline(trip, trackPoints, color);
+      print('Created polyline for trip ${trip.id}');
       
       // Add start and end markers
       await _addTripMarkers(trip, trackPoints, color);
+      print('Added markers for trip ${trip.id}');
     } catch (e) {
       print('Error displaying trip route for ${trip.title}: $e');
       // Continue with other trips even if one fails
@@ -91,15 +100,16 @@ class MapTripController {
       PolylineAnnotationOptions(
         geometry: lineString,
         lineColor: color,
-        lineWidth: 4.0,
-        lineOpacity: 0.8,
+        lineWidth: 5.0, // Slightly thicker for better visibility
+        lineOpacity: 0.9, // More opaque
+        // Note: linePattern might not be supported in this version, removed for compatibility
       ),
     );
     
     _currentPolylineIds.add(polylineId);
   }
 
-  /// Add start and end markers for trip
+  /// Add enhanced start and end markers for trip
   Future<void> _addTripMarkers(Trip trip, List<TrackPoint> trackPoints, int color) async {
     if (trackPoints.isEmpty) return;
 
@@ -108,39 +118,140 @@ class MapTripController {
     
     final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
     
-    // Start marker
+    // Enhanced Start marker with icon
     final startMarkerId = 'trip_${trip.id}_start';
     await pointManager.create(
       PointAnnotationOptions(
         geometry: Point(coordinates: Position(startPoint.longitude, startPoint.latitude)),
-        iconSize: 1.0,
+        iconSize: 1.2,
         iconAnchor: IconAnchor.BOTTOM,
-        textField: 'Start',
-        textSize: 10,
+        textField: '🚀 Start',
+        textSize: 12,
         textColor: 0xFFFFFFFF,
-        textHaloColor: color,
-        textHaloWidth: 2.0,
+        textHaloColor: 0xFF4CAF50, // Green halo for start
+        textHaloWidth: 3.0,
+        textOffset: [0.0, -2.0],
       ),
     );
     _currentMarkerIds.add(startMarkerId);
     
-    // End marker (only if different from start)
+    // Enhanced End marker with icon (only if different from start)
     if (trackPoints.length > 1) {
       final endMarkerId = 'trip_${trip.id}_end';
       await pointManager.create(
         PointAnnotationOptions(
           geometry: Point(coordinates: Position(endPoint.longitude, endPoint.latitude)),
-          iconSize: 1.0,
+          iconSize: 1.2,
           iconAnchor: IconAnchor.BOTTOM,
-          textField: 'End',
-          textSize: 10,
+          textField: '🏁 End',
+          textSize: 12,
           textColor: 0xFFFFFFFF,
-          textHaloColor: color,
-          textHaloWidth: 2.0,
+          textHaloColor: 0xFFF44336, // Red halo for end
+          textHaloWidth: 3.0,
+          textOffset: [0.0, -2.0],
         ),
       );
       _currentMarkerIds.add(endMarkerId);
     }
+    
+    // Add individual track point markers (every 5th point to avoid clutter)
+    await _addTrackPointMarkers(trip, trackPoints, color, pointManager);
+  }
+
+  /// Add individual track point markers along the route
+  Future<void> _addTrackPointMarkers(Trip trip, List<TrackPoint> trackPoints, int color, dynamic pointManager) async {
+    if (trackPoints.length < 3) return; // Don't add individual markers for very short routes
+    
+    print('Adding track point markers for trip ${trip.id}: ${trackPoints.length} total points');
+    
+    // Show ALL track points for maximum visibility and future media integration
+    int stepSize = 1; // Always show every point for complete visualization
+    if (trackPoints.length > 1000) stepSize = 2; // Only reduce for extremely long routes
+    
+    print('Using step size: $stepSize');
+    
+    int markersAdded = 0;
+    
+    // Add markers for track points with enhanced visibility
+    for (int i = 0; i < trackPoints.length; i += stepSize) {
+      final trackPoint = trackPoints[i];
+      
+      // Skip start and end points as they have special markers
+      if (i == 0 || i == trackPoints.length - 1) continue;
+      
+      final markerId = 'trip_${trip.id}_point_$i';
+      try {
+        // Enhanced marker styles for better visibility and future media integration
+        String markerIcon;
+        double markerSize;
+        double textSize;
+        int haloWidth;
+        int haloColor;
+        
+        // Check if track point has media (for future implementation)
+        bool hasMedia = trackPoint.isSignificant; // Use existing field for now
+        
+        // Create different marker styles based on significance and media
+        if (hasMedia) {
+          // Media points - most prominent
+          markerIcon = '📸'; // Camera icon for points with media
+          markerSize = 1.8; // Larger for media points
+          textSize = 14;
+          haloWidth = 5;
+          haloColor = 0xFFFF6B35; // Orange for media points
+        } else if (i % 20 == 0) {
+          // Major waypoints - very visible
+          markerIcon = '⭐'; // Star for major waypoints
+          markerSize = 1.6;
+          textSize = 13;
+          haloWidth = 4;
+          haloColor = 0xFFFFD700; // Gold for major waypoints
+        } else if (i % 10 == 0) {
+          // Significant points - highly visible
+          markerIcon = '🔵'; // Blue circle for significant points
+          markerSize = 1.4;
+          textSize = 12;
+          haloWidth = 4;
+          haloColor = 0xFF2196F3; // Blue for significant points
+        } else if (i % 5 == 0) {
+          // Medium points - visible
+          markerIcon = '🟢'; // Green circle for medium points
+          markerSize = 1.2;
+          textSize = 11;
+          haloWidth = 3;
+          haloColor = 0xFF4CAF50; // Green for medium points
+        } else {
+          // Regular points - always visible
+          markerIcon = '📍'; // Pin for regular points
+          markerSize = 1.0;
+          textSize = 10;
+          haloWidth = 3;
+          haloColor = color; // Use trip color for regular points
+        }
+        
+        await pointManager.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(trackPoint.longitude, trackPoint.latitude)),
+            iconSize: markerSize,
+            iconAnchor: IconAnchor.CENTER,
+            textField: markerIcon,
+            textSize: textSize,
+            textColor: 0xFFFFFFFF,
+            textHaloColor: haloColor,
+            textHaloWidth: haloWidth.toDouble(),
+            // Enhanced offset for better visual separation
+            textOffset: [0.0, -1.5],
+          ),
+        );
+        _currentMarkerIds.add(markerId);
+        markersAdded++;
+        print('Added track point marker $markerId at ${trackPoint.latitude}, ${trackPoint.longitude}');
+      } catch (e) {
+        print('Error creating track point marker $markerId: $e');
+      }
+    }
+    
+    print('Successfully added $markersAdded track point markers for trip ${trip.id}');
   }
 
   /// Clear all trip route annotations
@@ -162,6 +273,112 @@ class MapTripController {
     }
   }
 
+  /// Add trip information popup at a specific location
+  Future<void> addTripInfoPopup(Trip trip, double latitude, double longitude) async {
+    try {
+      final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
+      
+      await pointManager.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(longitude, latitude)),
+          iconSize: 1.0,
+          iconAnchor: IconAnchor.BOTTOM,
+          textField: 'ℹ️ ${trip.title}',
+          textSize: 11,
+          textColor: 0xFFFFFFFF,
+          textHaloColor: 0xFF2196F3, // Blue halo for info
+          textHaloWidth: 3.0,
+          textOffset: [0.0, -2.0],
+        ),
+      );
+      
+      _currentMarkerIds.add('trip_${trip.id}_info');
+    } catch (e) {
+      print('Error adding trip info popup: $e');
+    }
+  }
+
+  /// Add track points with custom density level
+  Future<void> addTrackPointsWithDensity(Trip trip, List<TrackPoint> trackPoints, int color, String density) async {
+    if (trackPoints.isEmpty) return;
+    
+    final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
+    print('Adding track points with density: $density for trip ${trip.id}');
+    
+    int stepSize;
+    String markerIcon;
+    double markerSize;
+    double textSize;
+    double haloWidth;
+    int haloColor;
+    
+    switch (density.toLowerCase()) {
+      case 'high':
+        stepSize = 1; // Every point - maximum detail
+        markerIcon = '📍';
+        markerSize = 1.0; // Increased for better visibility
+        textSize = 10;
+        haloWidth = 3.0; // Increased for better visibility
+        haloColor = color;
+        break;
+      case 'medium':
+        stepSize = 2; // Every 2nd point - still high detail
+        markerIcon = '🔵';
+        markerSize = 1.2; // Larger for better visibility
+        textSize = 11;
+        haloWidth = 3.5;
+        haloColor = 0xFF2196F3; // Blue
+        break;
+      case 'low':
+        stepSize = 5; // Every 5th point - overview mode
+        markerIcon = '⭐';
+        markerSize = 1.4; // Larger for overview
+        textSize = 12;
+        haloWidth = 4.0;
+        haloColor = 0xFFFFD700; // Gold
+        break;
+      default:
+        stepSize = 1; // Default to high density
+        markerIcon = '📍';
+        markerSize = 1.0;
+        textSize = 10;
+        haloWidth = 3.0;
+        haloColor = color;
+    }
+    
+    int markersAdded = 0;
+    
+    for (int i = 0; i < trackPoints.length; i += stepSize) {
+      final trackPoint = trackPoints[i];
+      
+      // Skip start and end points
+      if (i == 0 || i == trackPoints.length - 1) continue;
+      
+      final markerId = 'trip_${trip.id}_${density}_$i';
+      try {
+        await pointManager.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(trackPoint.longitude, trackPoint.latitude)),
+            iconSize: markerSize,
+            iconAnchor: IconAnchor.CENTER,
+            textField: markerIcon,
+            textSize: textSize,
+            textColor: 0xFFFFFFFF,
+            textHaloColor: haloColor,
+            textHaloWidth: haloWidth,
+            textOffset: [0.0, -1.5], // Enhanced offset
+          ),
+        );
+        _currentMarkerIds.add(markerId);
+        markersAdded++;
+      } catch (e) {
+        print('Error creating track point marker $markerId: $e');
+      }
+    }
+    
+    print('Successfully added $markersAdded track point markers with $density density');
+  }
+
   /// Display a specific trip route
   Future<void> displaySingleTrip(String tripId) async {
     try {
@@ -173,6 +390,143 @@ class MapTripController {
       print('Error displaying single trip: $e');
       rethrow;
     }
+  }
+
+  /// Add track point with media marker (for future media integration)
+  Future<void> addTrackPointWithMedia(Trip trip, TrackPoint trackPoint, int color, String mediaType) async {
+    if (_mapboxMap == null) return;
+    
+    final pointManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+    
+    String markerIcon;
+    int haloColor;
+    
+    // Different icons based on media type
+    switch (mediaType.toLowerCase()) {
+      case 'photo':
+        markerIcon = '📸';
+        haloColor = 0xFFFF6B35; // Orange
+        break;
+      case 'video':
+        markerIcon = '🎥';
+        haloColor = 0xFF9C27B0; // Purple
+        break;
+      case 'audio':
+        markerIcon = '🎵';
+        haloColor = 0xFF4CAF50; // Green
+        break;
+      case 'note':
+        markerIcon = '📝';
+        haloColor = 0xFF2196F3; // Blue
+        break;
+      default:
+        markerIcon = '📸';
+        haloColor = 0xFFFF6B35; // Orange
+    }
+    
+    final markerId = 'trip_${trip.id}_media_${trackPoint.id}';
+    try {
+      await pointManager.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(trackPoint.longitude, trackPoint.latitude)),
+          iconSize: 2.0, // Large for media points
+          iconAnchor: IconAnchor.CENTER,
+          textField: markerIcon,
+          textSize: 16,
+          textColor: 0xFFFFFFFF,
+          textHaloColor: haloColor,
+          textHaloWidth: 5.0,
+          textOffset: [0.0, -2.0],
+        ),
+      );
+      _currentMarkerIds.add(markerId);
+      print('Added media track point marker $markerId for ${trackPoint.id}');
+    } catch (e) {
+      print('Error creating media track point marker $markerId: $e');
+    }
+  }
+
+  /// Add ALL track point markers for debugging (use sparingly)
+  Future<void> addAllTrackPointMarkers(Trip trip, List<TrackPoint> trackPoints, int color) async {
+    if (trackPoints.isEmpty) return;
+    
+    final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
+    print('Adding ALL track point markers for trip ${trip.id}: ${trackPoints.length} points');
+    
+    int markersAdded = 0;
+    
+    for (int i = 0; i < trackPoints.length; i++) {
+      final trackPoint = trackPoints[i];
+      
+      final markerId = 'trip_${trip.id}_all_$i';
+      try {
+        // Enhanced debug markers with different styles
+        String markerIcon;
+        double markerSize;
+        double textSize;
+        int haloColor;
+        double haloWidth;
+        
+        // Different styles based on position
+        if (i == 0) {
+          markerIcon = '🚀'; // Start marker
+          markerSize = 1.5;
+          textSize = 14;
+          haloColor = 0xFF4CAF50; // Green
+          haloWidth = 4.0;
+        } else if (i == trackPoints.length - 1) {
+          markerIcon = '🏁'; // End marker
+          markerSize = 1.5;
+          textSize = 14;
+          haloColor = 0xFFF44336; // Red
+          haloWidth = 4.0;
+        } else if (i % 20 == 0) {
+          markerIcon = '⭐'; // Star for every 20th point
+          markerSize = 1.2;
+          textSize = 12;
+          haloColor = 0xFFFF9800; // Orange
+          haloWidth = 3.0;
+        } else if (i % 10 == 0) {
+          markerIcon = '🔵'; // Blue circle for every 10th point
+          markerSize = 1.0;
+          textSize = 10;
+          haloColor = 0xFF2196F3; // Blue
+          haloWidth = 2.5;
+        } else if (i % 5 == 0) {
+          markerIcon = '🟢'; // Green circle for every 5th point
+          markerSize = 0.9;
+          textSize = 9;
+          haloColor = 0xFF4CAF50; // Green
+          haloWidth = 2.0;
+        } else {
+          markerIcon = '•'; // Small dot for regular points
+          markerSize = 0.7;
+          textSize = 8;
+          haloColor = 0xFF00FF00; // Bright green
+          haloWidth = 1.5;
+        }
+        
+        await pointManager.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(trackPoint.longitude, trackPoint.latitude)),
+            iconSize: markerSize,
+            iconAnchor: IconAnchor.CENTER,
+            textField: markerIcon,
+            textSize: textSize,
+            textColor: 0xFFFFFFFF,
+            textHaloColor: haloColor,
+            textHaloWidth: haloWidth,
+            textOffset: [0.0, -0.5],
+          ),
+        );
+        _currentMarkerIds.add(markerId);
+        markersAdded++;
+      } catch (e) {
+        print('Error creating all track point marker $markerId: $e');
+      }
+    }
+    
+    print('Successfully added $markersAdded ALL track point markers for trip ${trip.id}');
   }
 
   /// Get trip statistics for display

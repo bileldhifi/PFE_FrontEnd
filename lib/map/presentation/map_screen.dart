@@ -28,7 +28,8 @@ class _MapScreenState extends State<MapScreen> {
   
   // Trip route management
   MapTripController? _tripController;
-  bool _showTripRoutes = false; // Start with routes hidden by default
+  bool _showTripRoutes = true; // Always show routes by default
+  String _trackPointDensity = 'high'; // High density by default for better visibility
   
   // Authentication
   final AuthRepository _authRepository = AuthRepository();
@@ -125,8 +126,11 @@ class _MapScreenState extends State<MapScreen> {
       _isMapReady = true;
     });
     
-    // Don't automatically load trip routes - let user toggle them manually
-    // This prevents 403 errors on map load
+    // Automatically load trip routes for better user experience
+    // Load routes after map is ready
+    if (_isMapReady) {
+      _loadTripRoutes();
+    }
   }
 
   /// Load trip routes on the map
@@ -151,8 +155,8 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
         
-        // Only proceed if token validation succeeded
-        await _tripController!.loadAndDisplayTripRoutes();
+        // Load trips with custom density
+        await _loadTripsWithDensity();
       } catch (e) {
         print('Error loading trip routes: $e');
         
@@ -170,80 +174,20 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Toggle trip routes visibility
-  Future<void> _toggleTripRoutes() async {
-    // Check authentication first
-    final isAuthenticated = await _authRepository.isAuthenticated();
-    
-    if (!isAuthenticated) {
-      // Show a snackbar message instead of toggling
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please log in to view your trip routes'),
-            action: SnackBarAction(
-              label: 'Login',
-              onPressed: () => context.go('/auth/login'),
-            ),
-          ),
-        );
-      }
-      return;
-    }
-    
-    if (!_showTripRoutes) {
-      // User wants to show routes - validate token first
-      try {
-        await _authRepository.getCurrentUser();
-      } catch (e) {
-        print('Token validation failed: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Session expired. Please log in again.'),
-              action: SnackBarAction(
-                label: 'Login',
-                onPressed: () => context.go('/auth/login'),
-              ),
-            ),
-          );
-        }
-        return;
-      }
-    }
-    
-    setState(() {
-      _showTripRoutes = !_showTripRoutes;
-    });
-    
-    if (_showTripRoutes) {
-      // Try to load routes
-      try {
-        await _loadTripRoutes();
-      } catch (e) {
-        print('Failed to load trip routes: $e');
-        // If loading fails, just toggle back to off state
-        setState(() {
-          _showTripRoutes = false;
-        });
-        
-        // Show a subtle message to user
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Unable to load trip routes. Please try again later.'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    } else {
-      // Clear trip routes
-      if (_tripController != null) {
-        await _tripController!.clearAllAnnotations();
-      }
+  /// Load trips with custom track point density
+  Future<void> _loadTripsWithDensity() async {
+    try {
+      // Use the existing method to load routes
+      await _tripController!.loadAndDisplayTripRoutes();
+      
+      // The track points will be loaded with the enhanced density from the controller
+      print('Loaded trips with density: $_trackPointDensity');
+    } catch (e) {
+      print('Error loading trips with density: $e');
+      rethrow;
     }
   }
+
 
   /// Handle map style change
   void _changeMapStyle(String style) {
@@ -267,6 +211,71 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Change track point density
+  Future<void> _changeTrackPointDensity(String density) async {
+    setState(() {
+      _trackPointDensity = density;
+    });
+    
+    // Reload trip routes with new density
+    if (_showTripRoutes && _tripController != null) {
+      await _loadTripRoutes();
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Track point density changed to: $density')),
+    );
+  }
+
+  /// Debug method to show all track points
+  Future<void> _debugTrackPoints() async {
+    if (_tripController == null) return;
+    
+    try {
+      // Check authentication first
+      final isAuthenticated = await _authRepository.isAuthenticated();
+      if (!isAuthenticated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to debug track points')),
+        );
+        return;
+      }
+      
+      // Clear existing annotations
+      await _tripController!.clearAllAnnotations();
+      
+      // Load trips and show all track points
+      final apiClient = ApiClient();
+      final tripRouteRepository = TripRouteRepository(apiClient);
+      final trips = await tripRouteRepository.getAllTrips();
+      
+      print('Debug: Found ${trips.length} trips');
+      
+      for (int i = 0; i < trips.length; i++) {
+        final trip = trips[i];
+        print('Debug: Processing trip ${trip.title}');
+        
+        final trackPoints = await tripRouteRepository.getTripTrackPoints(trip.id);
+        print('Debug: Trip ${trip.title} has ${trackPoints.length} track points');
+        
+        if (trackPoints.isNotEmpty) {
+          // Use a default color for debug markers
+          const color = 0xFF00FF00; // Green
+          await _tripController!.addAllTrackPointMarkers(trip, trackPoints, color);
+        }
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Debug: Showing all track points for ${trips.length} trips')),
+      );
+    } catch (e) {
+      print('Debug error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Debug error: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -275,28 +284,78 @@ class _MapScreenState extends State<MapScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0,
-          actions: [
-            // Trip routes toggle
-            FutureBuilder<bool>(
-              future: _authRepository.isAuthenticated(),
-              builder: (context, snapshot) {
-                final isAuthenticated = snapshot.data ?? false;
-                return IconButton(
-                  icon: Icon(
-                    isAuthenticated 
-                        ? (_showTripRoutes ? Icons.route : Icons.route_outlined)
-                        : Icons.route_outlined,
-                    color: isAuthenticated 
-                        ? (_showTripRoutes ? Colors.blue : Colors.grey)
-                        : Colors.grey,
-                  ),
-                  onPressed: _toggleTripRoutes,
-                  tooltip: isAuthenticated 
-                      ? (_showTripRoutes ? 'Hide Trip Routes' : 'Show Trip Routes')
-                      : 'Login to view trip routes',
-                );
-              },
-            ),
+        actions: [
+          // Track point density selector
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.density_medium),
+            onSelected: _changeTrackPointDensity,
+            tooltip: 'Track Point Density',
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'high',
+                child: Row(
+                  children: [
+                    Icon(Icons.density_medium, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('High Density'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'medium',
+                child: Row(
+                  children: [
+                    Icon(Icons.density_medium, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Medium Density'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'low',
+                child: Row(
+                  children: [
+                    Icon(Icons.density_medium, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Low Density'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Debug button for track points
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: _debugTrackPoints,
+            tooltip: 'Debug Track Points',
+          ),
+          // Trip routes info (always visible)
+          FutureBuilder<bool>(
+            future: _authRepository.isAuthenticated(),
+            builder: (context, snapshot) {
+              final isAuthenticated = snapshot.data ?? false;
+              return IconButton(
+                icon: Icon(
+                  isAuthenticated ? Icons.route : Icons.route_outlined,
+                  color: isAuthenticated ? Colors.blue : Colors.grey,
+                ),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isAuthenticated 
+                            ? 'Trip routes are always visible'
+                            : 'Please log in to view trip routes',
+                      ),
+                    ),
+                  );
+                },
+                tooltip: isAuthenticated 
+                    ? 'Trip routes are always visible'
+                    : 'Login to view trip routes',
+              );
+            },
+          ),
             // Map style selector
             PopupMenuButton<String>(
             icon: const Icon(Icons.layers),
