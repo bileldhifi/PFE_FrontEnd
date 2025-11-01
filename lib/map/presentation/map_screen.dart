@@ -111,27 +111,27 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Handle map creation
-  void _onMapCreated(MapboxMap mapboxMap) {
-    _mapboxMap = mapboxMap;
-    
-    // Initialize trip route controller
-    final apiClient = ApiClient();
-    final tripRouteRepository = TripRouteRepository(apiClient);
-    _tripController = MapTripController(
-      mapboxMap: mapboxMap,
-      tripRouteRepository: tripRouteRepository,
-    );
-    
-    setState(() {
-      _isMapReady = true;
-    });
-    
-    // Automatically load trip routes for better user experience
-    // Load routes after map is ready
-    if (_isMapReady) {
-      _loadTripRoutes();
-    }
-  }
+ void _onMapCreated(MapboxMap mapboxMap) {
+  _mapboxMap = mapboxMap;
+
+  final apiClient = ApiClient();
+  final tripRouteRepository = TripRouteRepository(apiClient);
+  _tripController = MapTripController(
+    mapboxMap: mapboxMap,
+    tripRouteRepository: tripRouteRepository,
+  );
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // do nothing if this route isn’t on top anymore
+    final route = ModalRoute.of(context);
+    if (!mounted || route == null || !route.isCurrent) return;
+
+    setState(() => _isMapReady = true);
+    _loadTripRoutes();
+  });
+}
+
+
 
   /// Load trip routes on the map
   Future<void> _loadTripRoutes() async {
@@ -394,11 +394,14 @@ class _MapScreenState extends State<MapScreen> {
                   AppErrorWidget(
                     message: _error!,
                     onRetry: () {
-                      setState(() {
-                        _error = null;
-                        _isLoading = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        setState(() {
+                          _error = null;
+                          _isLoading = true;
+                        });
+                        _initializeMap();
                       });
-                      _initializeMap();
                     },
                   ),
                   if (_error!.contains('log in'))
@@ -430,20 +433,21 @@ class _MapScreenState extends State<MapScreen> {
               onMapCreated: _onMapCreated,
             ),
           
-          // Floating action buttons
-          if (_isMapReady && !_isLoading && _error == null) ...[
-            // Location button
+          // Location button - keep in stack
+          if (_isMapReady && !_isLoading && _error == null)
             Positioned(
               bottom: 20,
               right: 20,
               child: FloatingActionButton(
+                heroTag: 'location_btn', // Unique hero tag
                 onPressed: _onLocationPressed,
                 backgroundColor: Colors.white,
                 child: const Icon(Icons.my_location, color: Colors.blue),
               ),
             ),
             
-            // Map style indicator
+          // Map style indicator
+          if (_isMapReady && !_isLoading && _error == null)
             Positioned(
               top: 20,
               right: 20,
@@ -470,9 +474,35 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-          ],
         ],
       ),
+      // Use Scaffold's floatingActionButton instead of Positioned in Stack
+      floatingActionButton: (_isMapReady && !_isLoading && _error == null)
+          ? FloatingActionButton.extended(
+              heroTag: 'create_post_btn', // Unique hero tag
+              onPressed: () => _onCreatePostPressed(),
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_photo_alternate),
+              label: const Text('Create Post'),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  /// Handle create post button press - pass cached data
+  /// Includes trips with their IDs for post creation
+  void _onCreatePostPressed() {
+    final trips = _tripController?.trips ?? [];
+    
+    context.push(
+      '/post/select-location',
+      extra: {
+        'currentLocation': _currentLocation,
+        'trips': trips,
+        'trackPoints': _tripController?.trackPoints ?? {},
+      },
     );
   }
 

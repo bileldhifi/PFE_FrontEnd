@@ -50,3 +50,6 @@ app.*.map.json
 *.freezed.dart
 *.mocks.dart
 *.config.dart
+
+
+.cursorRules_flutter.md

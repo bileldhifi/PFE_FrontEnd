@@ -19,6 +19,8 @@ import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart
 import 'package:travel_diary_frontend/trips/presentation/my_trips_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/track_point_screen.dart';
+import 'package:travel_diary_frontend/post/presentation/screens/select_location_screen.dart';
+import 'package:travel_diary_frontend/post/presentation/screens/create_post_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -115,6 +117,27 @@ class AppRouter {
             tripId: tripId,
             tripTitle: tripTitle,
           );
+        },
+      ),
+
+      // Post creation routes
+      GoRoute(
+        path: '/post/select-location',
+        builder: (context, state) {
+          // Get cached location and trips from map screen via extra
+          final extraData = state.extra as Map<String, dynamic>?;
+          return SelectLocationScreen(
+            cachedLocation: extraData?['currentLocation'],
+            cachedTrips: extraData?['trips'],
+            cachedTrackPoints: extraData?['trackPoints'],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/post/create',
+        builder: (context, state) {
+          final locationData = state.extra as Map<String, dynamic>;
+          return CreatePostScreen(locationData: locationData);
         },
       ),
 

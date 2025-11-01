@@ -13,6 +13,10 @@ class MapTripController {
   final List<String> _currentPolylineIds = [];
   final List<String> _currentMarkerIds = [];
   
+  // Cache loaded data for reuse (optimization - avoid duplicate API calls)
+  List<Trip> trips = [];
+  Map<String, List<TrackPoint>> trackPoints = {};
+  
   // Color palette for different trips
   static const List<int> _tripColors = [
     0xFF007AFF, // Blue
@@ -37,8 +41,8 @@ class MapTripController {
       // Clear existing routes first
       await clearAllAnnotations();
       
-      // Fetch all trips
-      final trips = await _tripRouteRepository.getAllTrips();
+      // Fetch all trips and cache them
+      trips = await _tripRouteRepository.getAllTrips();
       
       // Display each trip route
       for (int i = 0; i < trips.length; i++) {
@@ -56,12 +60,13 @@ class MapTripController {
     try {
       print('Displaying trip route for: ${trip.title} (ID: ${trip.id})');
       
-      // Fetch track points for this trip
-      final trackPoints = await _tripRouteRepository.getTripTrackPoints(trip.id);
+      // Fetch track points for this trip and cache them
+      final tripTrackPoints = await _tripRouteRepository.getTripTrackPoints(trip.id);
+      trackPoints[trip.id] = tripTrackPoints; // Cache for reuse
       
-      print('Fetched ${trackPoints.length} track points for trip ${trip.id}');
+      print('Fetched ${tripTrackPoints.length} track points for trip ${trip.id}');
       
-      if (trackPoints.isEmpty) {
+      if (tripTrackPoints.isEmpty) {
         print('No track points found for trip ${trip.id}');
         return;
       }
@@ -69,11 +74,11 @@ class MapTripController {
       final color = _tripColors[colorIndex % _tripColors.length];
       
       // Create polyline for the route
-      await _createTripPolyline(trip, trackPoints, color);
+      await _createTripPolyline(trip, tripTrackPoints, color);
       print('Created polyline for trip ${trip.id}');
       
       // Add start and end markers
-      await _addTripMarkers(trip, trackPoints, color);
+      await _addTripMarkers(trip, tripTrackPoints, color);
       print('Added markers for trip ${trip.id}');
     } catch (e) {
       print('Error displaying trip route for ${trip.title}: $e');
