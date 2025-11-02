@@ -6,9 +6,9 @@ import 'package:travel_diary_frontend/core/widgets/app_network_image.dart';
 import 'package:travel_diary_frontend/core/widgets/retry_widget.dart';
 import 'package:travel_diary_frontend/core/widgets/visibility_badge.dart';
 import 'package:travel_diary_frontend/trips/presentation/controllers/trip_detail_controller.dart';
-import 'package:travel_diary_frontend/trips/presentation/trip_gallery_tab.dart';
+import 'package:travel_diary_frontend/trips/presentation/beautiful_gallery_tab.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_map_tab.dart';
-import 'package:travel_diary_frontend/trips/presentation/trip_timeline_tab.dart';
+import 'package:travel_diary_frontend/trips/presentation/simple_timeline_tab.dart';
 
 class TripDetailScreen extends ConsumerWidget {
   final String tripId;
@@ -251,9 +251,9 @@ class TripDetailScreen extends ConsumerWidget {
           },
           body: TabBarView(
             children: [
-              TripTimelineTab(steps: state.steps),
+              SimpleTimelineTab(tripId: tripId),
               TripMapTab(steps: state.steps),
-              TripGalleryTab(steps: state.steps),
+              BeautifulGalleryTab(tripId: tripId),
             ],
           ),
         ),

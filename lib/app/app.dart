@@ -9,6 +9,8 @@ class TravelDiaryApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    
     return ErrorBoundary(
       child: MaterialApp.router(
         title: 'Travel Diary',
@@ -19,8 +21,8 @@ class TravelDiaryApp extends ConsumerWidget {
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
         
-        // Router
-        routerConfig: AppRouter.router,
+        // Router with authentication
+        routerConfig: router,
       ),
     );
   }

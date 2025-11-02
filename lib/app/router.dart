@@ -23,11 +23,14 @@ import 'package:travel_diary_frontend/post/presentation/screens/select_location_
 import 'package:travel_diary_frontend/post/presentation/screens/create_post_screen.dart';
 import 'package:travel_diary_frontend/post/presentation/screens/media_viewer_screen.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _rootNavigatorKey = 
+    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> _shellNavigatorKey = 
+    GlobalKey<NavigatorState>();
 
-class AppRouter {
-  static GoRouter router = GoRouter(
+// Simple router without complex redirect logic
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     routes: [
@@ -55,10 +58,12 @@ class AppRouter {
         builder: (context, state) => const ChangePasswordScreen(),
       ),
 
-      // Main app with bottom navigation
+      // Main app with bottom navigation (protected)
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
-        builder: (context, state, child) => ScaffoldWithBottomNav(child: child),
+        builder: (context, state, child) => _AuthGuard(
+          child: ScaffoldWithBottomNav(child: child),
+        ),
         routes: [
           GoRoute(
             path: '/',
@@ -182,6 +187,32 @@ class AppRouter {
       ),
     ],
   );
+});
+
+// Auth guard widget - redirects to login if not authenticated
+class _AuthGuard extends ConsumerWidget {
+  final Widget child;
+
+  const _AuthGuard({required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+
+    // Redirect to login if not authenticated
+    if (!authState.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/auth/login');
+      });
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return child;
+  }
 }
 
 // Bottom navigation scaffold

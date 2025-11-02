@@ -1,6 +1,9 @@
+import 'dart:developer';
+
 import 'package:travel_diary_frontend/core/network/api_client.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/trip_request.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/trip_response.dart';
+import 'package:travel_diary_frontend/trips/data/models/timeline_response.dart';
 import 'package:travel_diary_frontend/trips/data/models/trip.dart';
 import 'package:travel_diary_frontend/trips/data/repo/trip_local_storage.dart';
 
@@ -117,5 +120,43 @@ class TripRepository {
       trips.add(await mapToTrip(response));
     }
     return trips;
+  }
+
+  /// Get timeline for a trip with track points and posts
+  Future<TimelineResponse> getTimeline(String tripId) async {
+    try {
+      log('🔵 [TIMELINE] Fetching timeline for trip: $tripId');
+      
+      final response = await _apiClient.get(
+        '/trips/$tripId/timeline',
+      );
+      
+      log('🔵 [TIMELINE] Response status: ${response.statusCode}');
+      log('🔵 [TIMELINE] Response data type: ${response.data.runtimeType}');
+      log('🔵 [TIMELINE] Has items key: ${(response.data as Map).containsKey('items')}');
+      log('🔵 [TIMELINE] Has stats key: ${(response.data as Map).containsKey('stats')}');
+      
+      if (response.data is Map) {
+        final data = response.data as Map<String, dynamic>;
+        log('🔵 [TIMELINE] Items count in response: ${(data['items'] as List?)?.length ?? 0}');
+      }
+      
+      final timeline = TimelineResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+      
+      log(
+        '🔵 [TIMELINE] Parsed successfully - '
+        '${timeline.items.length} items, '
+        '${timeline.stats?.totalPhotos ?? 0} photos',
+      );
+      
+      return timeline;
+    } catch (e, stackTrace) {
+      log('🔴 [TIMELINE] Error fetching timeline: $e', 
+          error: e, 
+          stackTrace: stackTrace);
+      throw Exception('Failed to fetch timeline: $e');
+    }
   }
 }

@@ -122,13 +122,25 @@ class _MediaViewerScreenState
             ),
           ),
 
-          // Progress indicators - Instagram style
+          // Progress indicators at top
           if (_posts != null && _posts!.isNotEmpty)
             Positioned(
               top: MediaQuery.of(context).padding.top + 60,
               left: 8,
               right: 8,
-              child: _InstagramStyleProgress(
+              child: _PostProgressBars(
+                posts: _posts!,
+                currentPostIndex: _currentPostIndex,
+              ),
+            ),
+          
+          // Image dots at bottom - Timeline style
+          if (_posts != null && _posts!.isNotEmpty)
+            Positioned(
+              bottom: 100,
+              left: 0,
+              right: 0,
+              child: _ImageDotIndicators(
                 posts: _posts!,
                 currentPostIndex: _currentPostIndex,
                 currentImageIndices: _currentImageIndices,
@@ -322,14 +334,52 @@ class _CircleButton extends StatelessWidget {
   }
 }
 
-/// Instagram-style progress bars
-/// Shows progress for each post and images within posts
-class _InstagramStyleProgress extends StatelessWidget {
+/// Thin horizontal progress bars at top for posts
+class _PostProgressBars extends StatelessWidget {
+  final List<Post> posts;
+  final int currentPostIndex;
+
+  const _PostProgressBars({
+    required this.posts,
+    required this.currentPostIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: List.generate(posts.length, (index) {
+          final isViewed = index < currentPostIndex;
+          final isCurrent = index == currentPostIndex;
+
+          return Expanded(
+            child: Container(
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: isViewed
+                    ? Colors.white
+                    : isCurrent
+                        ? Colors.white.withOpacity(0.9)
+                        : Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// Timeline-style elongated dot indicators at bottom for images
+class _ImageDotIndicators extends StatelessWidget {
   final List<Post> posts;
   final int currentPostIndex;
   final Map<int, int> currentImageIndices;
 
-  const _InstagramStyleProgress({
+  const _ImageDotIndicators({
     required this.posts,
     required this.currentPostIndex,
     required this.currentImageIndices,
@@ -339,59 +389,34 @@ class _InstagramStyleProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentPost = posts[currentPostIndex];
     final currentImageIndex = currentImageIndices[currentPostIndex] ?? 0;
-    final hasMultipleImages = currentPost.media.length > 1;
+    final totalImages = currentPost.media.length;
+    
+    // Only show if current post has multiple images
+    if (totalImages <= 1) {
+      return const SizedBox.shrink();
+    }
+    
+    // Show maximum 5 dots
+    if (totalImages > 5) {
+      return const SizedBox.shrink();
+    }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Minimal progress bars
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: List.generate(posts.length, (index) {
-              final isViewed = index < currentPostIndex;
-              final isCurrent = index == currentPostIndex;
-
-              return Expanded(
-                child: Container(
-                  height: 2,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: isViewed
-                        ? Colors.white
-                        : isCurrent
-                            ? Colors.white.withOpacity(0.9)
-                            : Colors.white.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(1),
-                  ),
-                ),
-              );
-            }),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        totalImages,
+        (index) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          width: currentImageIndex == index ? 24 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: currentImageIndex == index
+                ? Colors.white
+                : Colors.white.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
-        
-        // Image dots for multi-image posts
-        if (hasMultipleImages) ...[
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              currentPost.media.length,
-              (index) => Container(
-                width: index == currentImageIndex ? 6 : 4,
-                height: index == currentImageIndex ? 6 : 4,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: index == currentImageIndex
-                      ? Colors.white
-                      : Colors.white.withOpacity(0.4),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 }

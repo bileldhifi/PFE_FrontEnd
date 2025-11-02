@@ -126,17 +126,29 @@ class AuthController extends StateNotifier<AuthState> {
     }
     
     try {
-      final isAuthenticated = await _authRepository.isAuthenticated();
+      final isAuthenticated = 
+          await _authRepository.isAuthenticated();
       
       if (isAuthenticated) {
-        // For now, just set as authenticated without fetching user details
-        // TODO: Implement getCurrentUser endpoint in backend or use cached user data
-        state = state.copyWith(
-          user: null, // Will be set when user logs in
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        );
+        // Fetch user data to restore full session
+        try {
+          final user = await _authRepository.getCurrentUser();
+          state = state.copyWith(
+            user: user,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          );
+        } catch (userError) {
+          // If fetching user fails, token might be invalid
+          await _authRepository.logout();
+          state = state.copyWith(
+            isLoading: false,
+            isAuthenticated: false,
+            user: null,
+            error: null,
+          );
+        }
       } else {
         state = state.copyWith(
           isLoading: false,
@@ -146,16 +158,17 @@ class AuthController extends StateNotifier<AuthState> {
         );
       }
     } catch (e) {
-      // If there's an error (like 403 for expired token), clear token and treat as unauthenticated
-      if (e.toString().contains('403') || e.toString().contains('Unauthorized')) {
-        await _authRepository.logout(); // Clear expired token
+      // If error checking auth, clear token and treat as unauthenticated
+      if (e.toString().contains('403') || 
+          e.toString().contains('Unauthorized')) {
+        await _authRepository.logout();
       }
       
       state = state.copyWith(
         isLoading: false,
         isAuthenticated: false,
         user: null,
-        error: null, // Don't show auth errors on startup
+        error: null,
       );
     }
   }
