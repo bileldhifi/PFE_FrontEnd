@@ -104,5 +104,25 @@ class PostRepository {
       throw Exception('Failed to fetch posts: $e');
     }
   }
+
+  /// Get posts by track point
+  /// Used for displaying media on map markers
+  Future<List<Post>> getPostsByTrackPoint(String trackPointId) async {
+    try {
+      final response = await _apiClient.get(
+        '/posts/track-point/$trackPointId',
+      );
+
+      final posts = (response.data as List)
+          .map((json) => Post.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      log('Fetched ${posts.length} posts for track point: $trackPointId');
+      return posts;
+    } catch (e) {
+      log('Error fetching posts by track point: $e', error: e);
+      throw Exception('Failed to fetch posts: $e');
+    }
+  }
 }
 

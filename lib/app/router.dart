@@ -21,6 +21,7 @@ import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart
 import 'package:travel_diary_frontend/trips/presentation/track_point_screen.dart';
 import 'package:travel_diary_frontend/post/presentation/screens/select_location_screen.dart';
 import 'package:travel_diary_frontend/post/presentation/screens/create_post_screen.dart';
+import 'package:travel_diary_frontend/post/presentation/screens/media_viewer_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -138,6 +139,21 @@ class AppRouter {
         builder: (context, state) {
           final locationData = state.extra as Map<String, dynamic>;
           return CreatePostScreen(locationData: locationData);
+        },
+      ),
+      
+      // Media viewer (Snapchat-style)
+      GoRoute(
+        path: '/post/media/:trackPointId',
+        builder: (context, state) {
+          final trackPointId = 
+              int.parse(state.pathParameters['trackPointId']!);
+          final locationName = 
+              state.uri.queryParameters['location'] ?? 'Unknown Location';
+          return MediaViewerScreen(
+            trackPointId: trackPointId,
+            locationName: locationName,
+          );
         },
       ),
 

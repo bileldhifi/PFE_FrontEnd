@@ -119,7 +119,8 @@ class _MapScreenState extends State<MapScreen> {
   _tripController = MapTripController(
     mapboxMap: mapboxMap,
     tripRouteRepository: tripRouteRepository,
-  );
+  )
+    ..onMarkerTap = _onMarkerTap;
 
   WidgetsBinding.instance.addPostFrameCallback((_) {
     // do nothing if this route isn’t on top anymore
@@ -279,108 +280,6 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Map'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-        actions: [
-          // Track point density selector
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.density_medium),
-            onSelected: _changeTrackPointDensity,
-            tooltip: 'Track Point Density',
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'high',
-                child: Row(
-                  children: [
-                    Icon(Icons.density_medium, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('High Density'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'medium',
-                child: Row(
-                  children: [
-                    Icon(Icons.density_medium, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Text('Medium Density'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'low',
-                child: Row(
-                  children: [
-                    Icon(Icons.density_medium, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Low Density'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Debug button for track points
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: _debugTrackPoints,
-            tooltip: 'Debug Track Points',
-          ),
-          // Trip routes info (always visible)
-          FutureBuilder<bool>(
-            future: _authRepository.isAuthenticated(),
-            builder: (context, snapshot) {
-              final isAuthenticated = snapshot.data ?? false;
-              return IconButton(
-                icon: Icon(
-                  isAuthenticated ? Icons.route : Icons.route_outlined,
-                  color: isAuthenticated ? Colors.blue : Colors.grey,
-                ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isAuthenticated 
-                            ? 'Trip routes are always visible'
-                            : 'Please log in to view trip routes',
-                      ),
-                    ),
-                  );
-                },
-                tooltip: isAuthenticated 
-                    ? 'Trip routes are always visible'
-                    : 'Login to view trip routes',
-              );
-            },
-          ),
-            // Map style selector
-            PopupMenuButton<String>(
-            icon: const Icon(Icons.layers),
-            onSelected: _changeMapStyle,
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: MapboxConfig.outdoorStyle,
-                child: Text('Outdoor'),
-              ),
-              const PopupMenuItem(
-                value: MapboxConfig.satelliteStyle,
-                child: Text('Satellite'),
-              ),
-              const PopupMenuItem(
-                value: MapboxConfig.streetsStyle,
-                child: Text('Streets'),
-              ),
-              const PopupMenuItem(
-                value: MapboxConfig.darkStyle,
-                child: Text('Dark'),
-              ),
-            ],
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           // Map
@@ -474,20 +373,32 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
+            
+            // Custom Top Bar (inspired by Snapchat map style)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _CustomMapTopBar(
+                onBackPressed: () => context.pop(),
+                onSettingsPressed: () => _showMapSettings(context),
+              ),
+            ),
+            
+            // Create Post Button - center bottom position
+            if (_isMapReady && !_isLoading && _error == null)
+              Positioned(
+                bottom: 30,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _CreatePostButton(
+                    onPressed: () => _onCreatePostPressed(),
+                  ),
+                ),
+              ),
         ],
       ),
-      // Use Scaffold's floatingActionButton instead of Positioned in Stack
-      floatingActionButton: (_isMapReady && !_isLoading && _error == null)
-          ? FloatingActionButton.extended(
-              heroTag: 'create_post_btn', // Unique hero tag
-              onPressed: () => _onCreatePostPressed(),
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_photo_alternate),
-              label: const Text('Create Post'),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -506,6 +417,13 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  /// Handle marker tap - open media viewer (Snapchat style)
+  void _onMarkerTap(int trackPointId, String locationName) {
+    context.push(
+      '/post/media/$trackPointId?location=$locationName',
+    );
+  }
+
   /// Get human-readable map style name
   String _getMapStyleName(String style) {
     switch (style) {
@@ -520,5 +438,359 @@ class _MapScreenState extends State<MapScreen> {
       default:
         return 'Map';
     }
+  }
+  
+  /// Show map settings bottom sheet
+  void _showMapSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Map Settings',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Map Style
+            ListTile(
+              leading: const Icon(Icons.layers),
+              title: const Text('Map Style'),
+              subtitle: Text(_getMapStyleName(_currentMapStyle)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => _buildMapStylePicker(),
+                );
+              },
+            ),
+            
+            // Track Point Density
+            ListTile(
+              leading: const Icon(Icons.density_medium),
+              title: const Text('Track Point Density'),
+              subtitle: Text(_trackPointDensity.toUpperCase()),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(context);
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => _buildDensityPicker(),
+                );
+              },
+            ),
+            
+            // Debug Track Points
+            ListTile(
+              leading: const Icon(Icons.bug_report),
+              title: const Text('Debug Track Points'),
+              subtitle: const Text('Show all track points'),
+              onTap: () {
+                Navigator.pop(context);
+                _debugTrackPoints();
+              },
+            ),
+            
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  /// Build map style picker
+  Widget _buildMapStylePicker() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Select Map Style',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          _buildStyleOption('Outdoor', MapboxConfig.outdoorStyle, Icons.terrain),
+          _buildStyleOption('Satellite', MapboxConfig.satelliteStyle, Icons.satellite),
+          _buildStyleOption('Streets', MapboxConfig.streetsStyle, Icons.map),
+          _buildStyleOption('Dark', MapboxConfig.darkStyle, Icons.dark_mode),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+  
+  /// Build density picker
+  Widget _buildDensityPicker() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Track Point Density',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          _buildDensityOption('High', 'high', Colors.green),
+          _buildDensityOption('Medium', 'medium', Colors.orange),
+          _buildDensityOption('Low', 'low', Colors.red),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+  
+  /// Build style option
+  Widget _buildStyleOption(String label, String value, IconData icon) {
+    final isSelected = _currentMapStyle == value;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? Colors.blue : Colors.grey),
+      title: Text(label),
+      trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
+      onTap: () {
+        Navigator.pop(context);
+        _changeMapStyle(value);
+      },
+    );
+  }
+  
+  /// Build density option
+  Widget _buildDensityOption(String label, String value, Color color) {
+    final isSelected = _trackPointDensity == value;
+    return ListTile(
+      leading: Icon(Icons.density_medium, color: isSelected ? color : Colors.grey),
+      title: Text(label),
+      trailing: isSelected ? Icon(Icons.check, color: color) : null,
+      onTap: () {
+        Navigator.pop(context);
+        _changeTrackPointDensity(value);
+      },
+    );
+  }
+}
+
+/// Custom top bar for map screen (Snapchat-inspired)
+class _CustomMapTopBar extends StatelessWidget {
+  final VoidCallback onBackPressed;
+  final VoidCallback onSettingsPressed;
+
+  const _CustomMapTopBar({
+    required this.onBackPressed,
+    required this.onSettingsPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 8,
+        left: 16,
+        right: 16,
+        bottom: 12,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withOpacity(0.6),
+            Colors.black.withOpacity(0.4),
+            Colors.black.withOpacity(0.2),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.5, 0.8, 1.0],
+        ),
+      ),
+      child: Row(
+        children: [
+          // Back button (left)
+          _TopBarButton(
+            icon: Icons.arrow_back,
+            onPressed: onBackPressed,
+          ),
+          
+          // Title (center)
+          Expanded(
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: const Text(
+                  'Map',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black45,
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          
+          // Settings button (right)
+          _TopBarButton(
+            icon: Icons.settings,
+            onPressed: onSettingsPressed,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top bar button widget
+class _TopBarButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _TopBarButton({
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.25),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withOpacity(0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(icon),
+        color: Colors.white,
+        iconSize: 22,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          shape: const CircleBorder(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Create Post Button - Modern floating design
+class _CreatePostButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _CreatePostButton({
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 14,
+        ),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.blue.shade600,
+              Colors.purple.shade600,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.purple.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.add_a_photo_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Create Post',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
