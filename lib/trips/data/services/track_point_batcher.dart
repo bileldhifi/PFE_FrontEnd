@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:developer';
+import 'package:geocoding/geocoding.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/track_point_request.dart';
 import 'package:travel_diary_frontend/trips/data/repo/track_point_repository.dart';
 
@@ -23,6 +25,7 @@ class TrackPointBatcher {
   Function(String)? onError;
   Function(int)? onBatchSent;
   Function(int)? onBatchQueued;
+  Function(int)? onAfterBatchSent;
   
   TrackPointBatcher({
     required TrackPointRepository repository,
@@ -30,8 +33,46 @@ class TrackPointBatcher {
     this.onError,
     this.onBatchSent,
     this.onBatchQueued,
+    this.onAfterBatchSent,
   }) : _repository = repository, _tripId = tripId;
   
+  /// Geocode a batch of requests to enrich them with location names
+  Future<List<TrackPointRequest>> _geocodeRequests(
+      List<TrackPointRequest> batch) async {
+    final updated = <TrackPointRequest>[];
+    for (final req in batch) {
+      // Skip if already has a location name
+      if (req.locationName != null && req.locationName!.isNotEmpty) {
+        updated.add(req);
+        continue;
+      }
+
+      String? locationName;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          req.latitude,
+          req.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final city = place.locality ?? place.subAdministrativeArea;
+          final country = place.country;
+          if (city != null && city.isNotEmpty) {
+            locationName =
+                (country != null && country.isNotEmpty) ? '$city, $country' : city;
+          } else if (country != null && country.isNotEmpty) {
+            locationName = country;
+          }
+        }
+      } catch (e) {
+        log('⚠️ Geocoding failed for (${req.latitude},${req.longitude}): $e');
+      }
+
+      updated.add(req.copyWith(locationName: locationName));
+    }
+    return updated;
+  }
+
   /// Add a track point to the batch
   void addTrackPoint(TrackPointRequest point) {
     _batch.add(point);
@@ -79,10 +120,15 @@ class TrackPointBatcher {
           break;
         }
         
+        // Enrich with location names before sending
+        final enrichedBatch = await _geocodeRequests(batchToSend);
+
         // Send batch to server
-        final responses = await _repository.addTrackPointsBulk(_tripId, batchToSend);
+        final responses =
+            await _repository.addTrackPointsBulk(_tripId, enrichedBatch);
         success = true;
         onBatchSent?.call(responses.length);
+        onAfterBatchSent?.call(responses.length);
         
       } catch (e) {
         retryCount++;
@@ -142,7 +188,39 @@ class OfflineTrackPointQueue {
     
     try {
       final pointsToSync = List<TrackPointRequest>.from(_queue);
-      await repository.addTrackPointsBulk(_tripId, pointsToSync);
+
+      // Enrich queued points with location names before syncing
+      final updated = <TrackPointRequest>[];
+      for (final req in pointsToSync) {
+        if (req.locationName != null && req.locationName!.isNotEmpty) {
+          updated.add(req);
+          continue;
+        }
+        String? locationName;
+        try {
+          final placemarks = await placemarkFromCoordinates(
+            req.latitude,
+            req.longitude,
+          );
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+            final city = place.locality ?? place.subAdministrativeArea;
+            final country = place.country;
+            if (city != null && city.isNotEmpty) {
+              locationName = (country != null && country.isNotEmpty)
+                  ? '$city, $country'
+                  : city;
+            } else if (country != null && country.isNotEmpty) {
+              locationName = country;
+            }
+          }
+        } catch (_) {
+          // ignore and keep null
+        }
+        updated.add(req.copyWith(locationName: locationName));
+      }
+      
+      await repository.addTrackPointsBulk(_tripId, updated);
       
       _queue.clear();
       await _clearLocalStorage();

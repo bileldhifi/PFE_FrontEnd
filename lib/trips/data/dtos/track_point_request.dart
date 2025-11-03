@@ -11,6 +11,7 @@ class TrackPointRequest with _$TrackPointRequest {
     @JsonKey(name: 'lon') required double longitude,
     @JsonKey(name: 'accuracyM') double? accuracyMeters,
     @JsonKey(name: 'speedMps') double? speedMps,
+    @JsonKey(name: 'locationName') String? locationName,
   }) = _TrackPointRequest;
 
   factory TrackPointRequest.fromJson(Map<String, dynamic> json) =>

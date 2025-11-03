@@ -200,37 +200,149 @@ class TripDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Column(
                     children: [
-                      _buildStatItem(
-                        context,
-                        icon: Icons.location_on_outlined,
-                        value: trip.stats.stepsCount.toString(),
-                        label: 'Steps',
+                      // Main stats row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildEnhancedStatItem(
+                            context,
+                            icon: Icons.route_rounded,
+                            value: '${trip.stats.distanceKm.toStringAsFixed(1)} km',
+                            label: 'Distance',
+                            color: Colors.blue,
+                          ),
+                          _buildEnhancedStatItem(
+                            context,
+                            icon: Icons.photo_library_rounded,
+                            value: '${trip.stats.photosCount}',
+                            label: 'Photos',
+                            color: Colors.purple,
+                          ),
+                          _buildEnhancedStatItem(
+                            context,
+                            icon: Icons.place_rounded,
+                            value: '${trip.stats.countriesCount}',
+                            label: 'Countries',
+                            color: Colors.green,
+                          ),
+                          _buildEnhancedStatItem(
+                            context,
+                            icon: Icons.location_city_rounded,
+                            value: '${trip.stats.citiesCount}',
+                            label: 'Cities',
+                            color: Colors.orange,
+                          ),
+                        ],
                       ),
-                      _buildStatItem(
-                        context,
-                        icon: Icons.photo_outlined,
-                        value: trip.stats.photosCount.toString(),
-                        label: 'Photos',
-                      ),
-                      _buildStatItem(
-                        context,
-                        icon: Icons.public_outlined,
-                        value: trip.stats.countriesCount.toString(),
-                        label: 'Countries',
-                      ),
-                      _buildStatItem(
-                        context,
-                        icon: Icons.route_outlined,
-                        value: '${trip.stats.distanceKm.toStringAsFixed(0)}',
-                        label: 'KM',
-                      ),
+                      
+                      // Duration
+                      if (trip.endDate != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatDuration(trip.startDate, trip.endDate!),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
+              
+              // Transport methods (if available)
+              if (trip.stats.transportMethods.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Theme.of(context).dividerColor,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.directions_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Transport Methods',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ...trip.stats.transportMethods.entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _getTransportColor(entry.key).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    _getTransportIcon(entry.key),
+                                    size: 20,
+                                    color: _getTransportColor(entry.key),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    entry.key,
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ),
+                                Text(
+                                  '${entry.value.toStringAsFixed(1)} km',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: _getTransportColor(entry.key),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
 
               // Tab bar
               SliverPersistentHeader(
@@ -295,6 +407,87 @@ class TripDetailScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+  
+  Widget _buildEnhancedStatItem(
+    BuildContext context, {
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 24,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.outline,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  String _formatDuration(DateTime start, DateTime end) {
+    final duration = end.difference(start);
+    if (duration.inDays > 0) {
+      return '${duration.inDays} day${duration.inDays > 1 ? "s" : ""}';
+    } else if (duration.inHours > 0) {
+      return '${duration.inHours} hour${duration.inHours > 1 ? "s" : ""}';
+    } else {
+      return '${duration.inMinutes} min';
+    }
+  }
+  
+  IconData _getTransportIcon(String method) {
+    switch (method.toLowerCase()) {
+      case 'walking':
+        return Icons.directions_walk_rounded;
+      case 'biking':
+        return Icons.directions_bike_rounded;
+      case 'driving':
+        return Icons.directions_car_rounded;
+      case 'flying':
+        return Icons.flight_rounded;
+      default:
+        return Icons.help_outline;
+    }
+  }
+  
+  Color _getTransportColor(String method) {
+    switch (method.toLowerCase()) {
+      case 'walking':
+        return Colors.green;
+      case 'biking':
+        return Colors.orange;
+      case 'driving':
+        return Colors.blue;
+      case 'flying':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   VisibilityType _getVisibilityType(String visibility) {

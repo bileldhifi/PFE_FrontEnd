@@ -1,3 +1,5 @@
+import 'dart:developer';
+import 'package:geocoding/geocoding.dart';
 import 'package:travel_diary_frontend/core/network/api_client.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/track_point_request.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/track_point_response.dart';
@@ -154,18 +156,66 @@ class TrackPointRepository {
     return responses.map((response) => mapToTrackPoint(response)).toList();
   }
 
-  /// Create TrackPointRequest from current location
-  TrackPointRequest createTrackPointRequest({
+  /// Create TrackPointRequest from current location with geocoding
+  Future<TrackPointRequest> createTrackPointRequest({
     required double latitude,
     required double longitude,
     double? accuracyMeters,
     double? speedMps,
+  }) async {
+    // Get location name from coordinates using geocoding
+    String? locationName;
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        latitude,
+        longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        final city = place.locality ?? place.subAdministrativeArea;
+        final country = place.country;
+        
+        if (city != null && city.isNotEmpty) {
+          if (country != null && country.isNotEmpty) {
+            locationName = '$city, $country';
+          } else {
+            locationName = city;
+          }
+        } else if (country != null && country.isNotEmpty) {
+          locationName = country;
+        }
+        
+        log('📍 Geocoded track point - City: $city, Country: $country');
+      }
+    } catch (e) {
+      log('⚠️ Geocoding failed for track point: $e - continuing without location name');
+      // Continue without location name if geocoding fails
+    }
+    
+    return TrackPointRequest(
+      latitude: latitude,
+      longitude: longitude,
+      accuracyMeters: accuracyMeters,
+      speedMps: speedMps,
+      locationName: locationName,
+    );
+  }
+  
+  /// Create TrackPointRequest from current location (synchronous, without geocoding)
+  /// Use this if you already have the location name or want to skip geocoding
+  TrackPointRequest createTrackPointRequestSync({
+    required double latitude,
+    required double longitude,
+    double? accuracyMeters,
+    double? speedMps,
+    String? locationName,
   }) {
     return TrackPointRequest(
       latitude: latitude,
       longitude: longitude,
       accuracyMeters: accuracyMeters,
       speedMps: speedMps,
+      locationName: locationName,
     );
   }
 

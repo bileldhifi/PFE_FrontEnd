@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import '../models/trip.dart';
 
 part 'trip_response.freezed.dart';
 part 'trip_response.g.dart';
@@ -11,6 +12,9 @@ class TripResponse with _$TripResponse {
     required DateTime startedAt,
     DateTime? endedAt,
     required String userEmail,
+    String? coverUrl,
+    String? visibility,
+    TripStats? stats,
   }) = _TripResponse;
 
   factory TripResponse.fromJson(Map<String, dynamic> json) =>

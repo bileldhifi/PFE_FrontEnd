@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import '../controllers/post_controller.dart';
 
@@ -169,6 +170,25 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           widget.locationData['tripId'] as String? ?? 
           'unknown-trip-id'; 
 
+      // Get city and country from coordinates using geocoding
+      String? city;
+      String? country;
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          latitude,
+          longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          city = place.locality ?? place.subAdministrativeArea;
+          country = place.country;
+          log('Geocoded location - City: $city, Country: $country');
+        }
+      } catch (e) {
+        log('Geocoding failed: $e - continuing without city/country');
+        // Continue without city/country if geocoding fails
+      }
+
       log('Creating post with ${images.length} images');
 
       final controller = ref.read(postControllerProvider.notifier);
@@ -179,6 +199,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         longitude: longitude,
         caption: _state.caption,
         visibility: 'PUBLIC',
+        city: city,
+        country: country,
         images: images,
       );
 

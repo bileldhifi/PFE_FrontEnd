@@ -17,6 +17,8 @@ class Post with _$Post {
     required double? longitude,
     required String userEmail,
     required String username,
+    String? city,
+    String? country,
     @Default([]) List<PostMedia> media,
   }) = _Post;
 

@@ -4,6 +4,9 @@ import 'package:travel_diary_frontend/trips/data/models/track_point.dart';
 import 'package:travel_diary_frontend/trips/data/dtos/track_point_request.dart';
 import 'package:travel_diary_frontend/trips/data/repo/track_point_repository.dart';
 import 'package:travel_diary_frontend/trips/data/services/track_point_batcher.dart';
+import 'package:travel_diary_frontend/trips/presentation/simple_timeline_tab.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_list_controller.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_detail_controller.dart';
 
 part 'track_point_controller.freezed.dart';
 
@@ -29,12 +32,15 @@ class TrackPointController extends StateNotifier<TrackPointState> {
   final TrackPointRepository _trackPointRepository;
   final String _tripId;
   late final TrackPointBatcher _batcher;
+  final Ref? _ref; // Optional ref for provider invalidation
 
   TrackPointController({
     required TrackPointRepository trackPointRepository,
     required String tripId,
+    Ref? ref,
   })  : _trackPointRepository = trackPointRepository,
         _tripId = tripId,
+        _ref = ref,
         super(const TrackPointState()) {
     _initializeBatcher();
   }
@@ -59,6 +65,23 @@ class TrackPointController extends StateNotifier<TrackPointState> {
           batchSize: size,
           isBatching: _batcher.isProcessing,
         );
+      },
+      onAfterBatchSent: (count) async {
+        // After the backend receives new points, refresh dependent views:
+        // 1) Refresh timeline (invalidate provider)
+        // 2) Refresh trip list (to update stats)
+        // 3) Refresh trip detail (to update stats display)
+        if (_ref != null) {
+          try {
+            _ref!.invalidate(simpleTimelineProvider(_tripId));
+            await _ref!.read(tripListControllerProvider.notifier).refresh();
+            // Trip detail will auto-update via listener, but force reload to be sure
+            _ref!.read(tripDetailControllerProvider(_tripId).notifier).loadTripDetail();
+          } catch (e) {
+            // Silently handle errors - refresh will happen on next user interaction
+            print('Error refreshing providers after batch: $e');
+          }
+        }
       },
     );
   }
@@ -345,5 +368,6 @@ final trackPointControllerProvider = StateNotifierProvider.family<TrackPointCont
   return TrackPointController(
     trackPointRepository: TrackPointRepository(),
     tripId: tripId,
+    ref: ref, // Pass ref so controller can invalidate providers
   );
 });

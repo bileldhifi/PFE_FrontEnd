@@ -35,6 +35,7 @@ class TripStats with _$TripStats {
     @Default(0) int countriesCount,
     @Default(0) int citiesCount,
     @Default(0) int photosCount,
+    @Default({}) Map<String, double> transportMethods,
   }) = _TripStats;
 
   factory TripStats.fromJson(Map<String, dynamic> json) =>

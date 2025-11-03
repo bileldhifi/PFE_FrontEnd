@@ -54,6 +54,8 @@ class PostController extends _$PostController {
     required double longitude,
     String? caption,
     required String visibility,
+    String? city,
+    String? country,
     required List<File> images,
   }) async {
     if (images.isEmpty) {
@@ -66,7 +68,7 @@ class PostController extends _$PostController {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      log('Creating post for trip: $tripId');
+      log('Creating post for trip: $tripId, city: $city, country: $country');
       
       final post = await _repository.createPost(
         tripId: tripId,
@@ -75,6 +77,8 @@ class PostController extends _$PostController {
         longitude: longitude,
         caption: caption,
         visibility: visibility,
+        city: city,
+        country: country,
         images: images,
       );
 

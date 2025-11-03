@@ -8,11 +8,13 @@ const String _kBaseUrl = 'http://localhost:8089/app-backend';
 class SimpleImageViewer extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
+  final List<String>? locationNames;
 
   const SimpleImageViewer({
     super.key,
     required this.imageUrls,
     this.initialIndex = 0,
+    this.locationNames,
   });
 
   /// Show image viewer as a modal
@@ -20,6 +22,7 @@ class SimpleImageViewer extends StatefulWidget {
     BuildContext context, {
     required List<String> imageUrls,
     int initialIndex = 0,
+    List<String>? locationNames,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -27,6 +30,7 @@ class SimpleImageViewer extends StatefulWidget {
         builder: (context) => SimpleImageViewer(
           imageUrls: imageUrls,
           initialIndex: initialIndex,
+          locationNames: locationNames,
         ),
       ),
     );
@@ -165,30 +169,93 @@ class _SimpleImageViewerState extends State<SimpleImageViewer> {
             ),
           ),
 
-          // Bottom indicator dots (for few images)
-          if (widget.imageUrls.length > 1 && widget.imageUrls.length <= 5)
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  widget.imageUrls.length,
-                  (index) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: _currentIndex == index ? 24 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _currentIndex == index
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
+          // Bottom section with location name and indicator dots
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.7),
+                    Colors.transparent,
+                  ],
                 ),
               ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Location name
+                  if (widget.locationNames != null &&
+                      widget.locationNames!.isNotEmpty &&
+                      _currentIndex < widget.locationNames!.length &&
+                      widget.locationNames![_currentIndex].isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.location_on_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            widget.locationNames![_currentIndex],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  
+                  // Indicator dots (for few images)
+                  if (widget.imageUrls.length > 1 && 
+                      widget.imageUrls.length <= 5)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          widget.imageUrls.length,
+                          (index) => Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: _currentIndex == index ? 24 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _currentIndex == index
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
+          ),
         ],
       ),
     );

@@ -6,8 +6,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:travel_diary_frontend/core/widgets/empty_state.dart';
 import 'package:travel_diary_frontend/core/widgets/loading_widget.dart';
+import 'package:travel_diary_frontend/trips/data/models/timeline_item.dart';
 import 'package:travel_diary_frontend/trips/data/models/timeline_response.dart';
 import 'package:travel_diary_frontend/trips/data/repo/trip_repository.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_list_controller.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_detail_controller.dart';
 import 'package:travel_diary_frontend/trips/presentation/widgets/simple_image_viewer.dart';
 
 /// Base URL for media
@@ -62,7 +65,12 @@ class SimpleTimelineTab extends ConsumerWidget {
           ),
           child: RefreshIndicator(
             onRefresh: () async {
+              // Invalidate timeline to fetch fresh data
               ref.invalidate(simpleTimelineProvider(tripId));
+              // Also refresh trip list to update stats (this will auto-update trip detail via listener)
+              await ref.read(tripListControllerProvider.notifier).refresh();
+              // Force trip detail to reload to ensure stats are updated
+              ref.read(tripDetailControllerProvider(tripId).notifier).loadTripDetail();
             },
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -139,7 +147,7 @@ class SimpleTimelineTab extends ConsumerWidget {
 
 /// Beautiful timeline card with timeline indicator
 class _BeautifulTimelineCard extends StatelessWidget {
-  final dynamic item;
+  final TimelineItem item;
   final bool isFirst;
   final bool isLast;
 
@@ -314,8 +322,7 @@ class _BeautifulTimelineCard extends StatelessWidget {
                           _InfoRow(
                             icon: Icons.location_on_rounded,
                             label: 'Location',
-                            value: '${item.latitude.toStringAsFixed(4)}, '
-                                '${item.longitude.toStringAsFixed(4)}',
+                            value: item.formattedLocation,
                             color: theme.colorScheme.error,
                           ),
                           
@@ -351,7 +358,12 @@ class _BeautifulTimelineCard extends StatelessWidget {
                           // Photos
                           if (hasPhotos) ...[
                             const SizedBox(height: 16),
-                            _buildPhotos(context, item.posts, theme),
+                            _buildPhotos(
+                              context, 
+                              item.posts, 
+                              theme,
+                              item.formattedLocation,
+                            ),
                           ],
                           
                           // Caption
@@ -406,6 +418,7 @@ class _BeautifulTimelineCard extends StatelessWidget {
     BuildContext context,
     List<dynamic> posts,
     ThemeData theme,
+    String locationName,
   ) {
     final photos = <String>[];
     for (final post in posts) {
@@ -416,6 +429,12 @@ class _BeautifulTimelineCard extends StatelessWidget {
       }
     }
     
+    // Create location names list (same location for all photos in this post)
+    final locationNames = List<String>.filled(
+      photos.length,
+      locationName,
+    );
+    
     if (photos.isEmpty) return const SizedBox.shrink();
     
     if (photos.length == 1) {
@@ -425,6 +444,7 @@ class _BeautifulTimelineCard extends StatelessWidget {
             context,
             imageUrls: photos,
             initialIndex: 0,
+            locationNames: locationNames,
           );
         },
         child: ClipRRect(
@@ -480,6 +500,7 @@ class _BeautifulTimelineCard extends StatelessWidget {
                 context,
                 imageUrls: photos,
                 initialIndex: 3,
+                locationNames: locationNames,
               );
             },
             child: Stack(
@@ -536,6 +557,7 @@ class _BeautifulTimelineCard extends StatelessWidget {
               context,
               imageUrls: photos,
               initialIndex: index,
+              locationNames: locationNames,
             );
           },
           child: ClipRRect(

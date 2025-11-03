@@ -6,6 +6,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel_diary_frontend/core/widgets/empty_state.dart';
 import 'package:travel_diary_frontend/core/widgets/loading_widget.dart';
 import 'package:travel_diary_frontend/trips/presentation/simple_timeline_tab.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_list_controller.dart';
+import 'package:travel_diary_frontend/trips/presentation/controllers/trip_detail_controller.dart';
 import 'package:travel_diary_frontend/trips/presentation/widgets/simple_image_viewer.dart';
 
 /// Base URL for media
@@ -48,14 +50,16 @@ class _BeautifulGalleryTabState extends ConsumerState<BeautifulGalleryTab> {
         // Collect all media from timeline items
         final allMedia = <_MediaItem>[];
         for (final item in timeline.items) {
+          final locationName = item.locationName ?? 
+              '${item.latitude.toStringAsFixed(4)}, ${item.longitude.toStringAsFixed(4)}';
           for (final post in item.posts) {
             if (post.media.isNotEmpty) {
               for (final media in post.media) {
                 allMedia.add(
                   _MediaItem(
                     url: media.url,
-                    stepName: item.locationName,
                     trackPointId: item.trackPointId.toString(),
+                    locationName: locationName,
                     isVideo: media.type == 'VIDEO',
                   ),
                 );
@@ -107,33 +111,47 @@ class _BeautifulGalleryTabState extends ConsumerState<BeautifulGalleryTab> {
               // Filter chips
               _buildFilterBar(theme, filteredMedia.length),
               
-              // Gallery grid
+              // Gallery grid with pull-to-refresh
               Expanded(
-                child: GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemCount: filteredMedia.length,
-                  itemBuilder: (context, index) {
-                    final item = filteredMedia[index];
-                    return _GalleryTile(
-                      item: item,
-                      onTap: () {
-                        // Get all image URLs from filtered media
-                        final allUrls = filteredMedia
-                            .map((m) => m.url)
-                            .toList();
-                        SimpleImageViewer.show(
-                          context,
-                          imageUrls: allUrls,
-                          initialIndex: index,
-                        );
-                      },
-                    );
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    // Invalidate timeline to fetch fresh data
+                    ref.invalidate(simpleTimelineProvider(widget.tripId));
+                    // Also refresh trip list to update stats (this will auto-update trip detail via listener)
+                    await ref.read(tripListControllerProvider.notifier).refresh();
+                    // Force trip detail to reload to ensure stats are updated
+                    ref.read(tripDetailControllerProvider(widget.tripId).notifier).loadTripDetail();
                   },
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: filteredMedia.length,
+                    itemBuilder: (context, index) {
+                      final item = filteredMedia[index];
+                      return _GalleryTile(
+                        item: item,
+                        onTap: () {
+                          // Get all image URLs and location names from filtered media
+                          final allUrls = filteredMedia
+                              .map((m) => m.url)
+                              .toList();
+                          final allLocationNames = filteredMedia
+                              .map((m) => m.locationName ?? '')
+                              .toList();
+                          SimpleImageViewer.show(
+                            context,
+                            imageUrls: allUrls,
+                            initialIndex: index,
+                            locationNames: allLocationNames,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -412,43 +430,6 @@ class _GalleryTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                
-                // Location badge
-                if (item.stepName != null)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.location_on_rounded,
-                            color: Colors.white,
-                            size: 12,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            item.stepName!,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -461,15 +442,15 @@ class _GalleryTile extends StatelessWidget {
 /// Media item model
 class _MediaItem {
   final String url;
-  final String? stepName;
   final String? trackPointId;
+  final String? locationName;
   final bool isVideo;
   final bool isFavorite;
 
   _MediaItem({
     required this.url,
-    this.stepName,
     this.trackPointId,
+    this.locationName,
     this.isVideo = false,
     this.isFavorite = false,
   });

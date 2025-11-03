@@ -37,6 +37,12 @@ class TripDetailController extends StateNotifier<TripDetailState> {
   final Ref ref;
   
   TripDetailController(this.tripId, this.ref) : super(TripDetailState()) {
+    // Watch trip list provider and update when it changes
+    ref.listen<TripListState>(tripListControllerProvider, (previous, next) {
+      _updateTripFromList(next);
+    });
+    
+    // Initial load
     loadTripDetail();
   }
 
@@ -48,39 +54,47 @@ class TripDetailController extends StateNotifier<TripDetailState> {
       
       // Get trips from the trip list provider
       final tripListState = ref.read(tripListControllerProvider);
-      
-      // Check if trip exists
-      Trip? trip;
-      try {
-        trip = tripListState.trips.firstWhere((t) => t.id == tripId);
-      } catch (e) {
-        // Trip not found in current list
-        trip = null;
-      }
-      
-      if (trip == null) {
-        state = state.copyWith(
-          trip: null,
-          steps: const [],
-          isLoading: false,
-          error: 'Trip not found',
-        );
-        return;
-      }
-      
-      final steps = FakeData.getStepsForTrip(tripId);
-      
-      state = state.copyWith(
-        trip: trip,
-        steps: steps,
-        isLoading: false,
-      );
+      _updateTripFromList(tripListState);
     } catch (e) {
       state = state.copyWith(
         error: e.toString(),
         isLoading: false,
       );
     }
+  }
+
+  /// Update trip data from trip list state
+  void _updateTripFromList(TripListState tripListState) {
+    // Check if trip exists
+    Trip? trip;
+    try {
+      trip = tripListState.trips.firstWhere((t) => t.id == tripId);
+    } catch (e) {
+      // Trip not found in current list
+      trip = null;
+    }
+    
+    if (trip == null) {
+      state = state.copyWith(
+        trip: null,
+        steps: const [],
+        isLoading: false,
+        error: 'Trip not found',
+      );
+      return;
+    }
+    
+    // Keep existing steps if trip data just updated (stats refresh)
+    final steps = state.steps.isNotEmpty 
+        ? state.steps 
+        : FakeData.getStepsForTrip(tripId);
+    
+    state = state.copyWith(
+      trip: trip,
+      steps: steps,
+      isLoading: false,
+      error: null,
+    );
   }
 
   Future<void> addStep(StepPost step) async {

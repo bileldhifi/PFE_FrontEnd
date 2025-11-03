@@ -23,6 +23,8 @@ class PostRepository {
     required double longitude,
     String? caption,
     required String visibility,
+    String? city,
+    String? country,
     required List<File> images,
   }) async {
     try {
@@ -45,6 +47,12 @@ class PostRepository {
         formData.fields.add(MapEntry('text', caption));
       }
       formData.fields.add(MapEntry('visibility', visibility));
+      if (city != null && city.isNotEmpty) {
+        formData.fields.add(MapEntry('city', city));
+      }
+      if (country != null && country.isNotEmpty) {
+        formData.fields.add(MapEntry('country', country));
+      }
 
       // Add images
       for (final image in images) {

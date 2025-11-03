@@ -96,12 +96,14 @@ class TripRepository {
       title: response.title,
       startDate: response.startedAt,
       endDate: response.endedAt,
-      visibility: additionalDetails?['visibility'] ?? 'PUBLIC',
-      stats: const TripStats(), // Default stats since backend doesn't have this field
+      visibility: response.visibility ?? 
+                   additionalDetails?['visibility'] ?? 
+                   'PUBLIC',
+      stats: response.stats ?? const TripStats(), // Use stats from backend
       createdBy: response.userEmail, // Using email as createdBy for now
       createdAt: response.startedAt,
       description: additionalDetails?['description'],
-      coverUrl: additionalDetails?['coverUrl'],
+      coverUrl: response.coverUrl ?? additionalDetails?['coverUrl'],
       // Map additional fields from local storage
       location: additionalDetails?['location'],
       tripType: additionalDetails?['tripType'],
