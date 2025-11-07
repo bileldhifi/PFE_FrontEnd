@@ -15,6 +15,7 @@ class Post with _$Post {
     required int? trackPointId,
     required double? latitude,
     required double? longitude,
+    required String? userId,
     required String userEmail,
     required String username,
     String? city,

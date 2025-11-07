@@ -132,5 +132,51 @@ class PostRepository {
       throw Exception('Failed to fetch posts: $e');
     }
   }
+
+  Future<List<Post>> getPublicPosts({
+    String? country,
+    String? city,
+  }) async {
+    try {
+      final queryParams = <String, dynamic>{};
+      if (country != null && country.isNotEmpty) {
+        queryParams['country'] = country;
+      }
+      if (city != null && city.isNotEmpty) {
+        queryParams['city'] = city;
+      }
+
+      final response = await _apiClient.get(
+        '/posts/public',
+        queryParameters: queryParams.isEmpty ? null : queryParams,
+      );
+
+      final posts = (response.data as List)
+          .map((json) => Post.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      log('Fetched ${posts.length} public posts');
+      return posts;
+    } catch (e) {
+      log('Error fetching public posts: $e', error: e);
+      throw Exception('Failed to fetch public posts: $e');
+    }
+  }
+
+  Future<List<Post>> getFollowingPosts() async {
+    try {
+      final response = await _apiClient.get('/posts/following');
+
+      final posts = (response.data as List)
+          .map((json) => Post.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      log('Fetched ${posts.length} posts from followed users');
+      return posts;
+    } catch (e) {
+      log('Error fetching following posts: $e', error: e);
+      throw Exception('Failed to fetch following posts: $e');
+    }
+  }
 }
 

@@ -27,12 +27,9 @@ class ProfileRepository {
 
   /// Get user profile by ID
   /// Requires authentication
-  /// Note: This endpoint was removed, using getCurrentUser instead
   Future<User> getUserById(String userId) async {
     try {
-      // For now, we'll use getCurrentUser since we removed the /users/{userId} endpoint
-      // TODO: Re-implement this endpoint if needed for viewing other users' profiles
-      final response = await _apiClient.get<Map<String, dynamic>>('/users/me');
+      final response = await _apiClient.get<Map<String, dynamic>>('/users/$userId');
 
       if (response.statusCode == 200 && response.data != null) {
         return User.fromJson(response.data!);
@@ -43,6 +40,11 @@ class ProfileRepository {
         );
       }
     } on DioException catch (e) {
+      if (e.response?.statusCode == 403) {
+        throw Exception('Access forbidden. You may not have permission to view this profile.');
+      } else if (e.response?.statusCode == 404) {
+        throw Exception('User not found.');
+      }
       throw _handleProfileError(e);
     }
   }

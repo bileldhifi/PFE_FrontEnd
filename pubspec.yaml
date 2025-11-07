@@ -44,6 +44,7 @@ dependencies:
   # HTTP & Networking
   dio: ^5.7.0
   http: ^1.1.0
+  web_socket_channel: ^3.0.1
   
   # Code Generation
   freezed_annotation: ^2.4.4

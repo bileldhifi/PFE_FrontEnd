@@ -1,15 +1,29 @@
+import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/core/utils/date_time.dart';
 import 'package:travel_diary_frontend/core/widgets/app_avatar.dart';
 import 'package:travel_diary_frontend/core/widgets/app_network_image.dart';
 import 'package:travel_diary_frontend/feed/data/models/feed_post.dart';
+import 'package:travel_diary_frontend/trips/presentation/widgets/simple_image_viewer.dart';
+import 'package:travel_diary_frontend/social/presentation/controllers/follow_controller.dart';
+import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
 
-class PostCard extends StatefulWidget {
+const String _kBaseUrl = 'http://localhost:8089/app-backend';
+
+String _buildImageUrl(String url) {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  return '$_kBaseUrl$url';
+}
+
+class PostCard extends ConsumerStatefulWidget {
   final FeedPost post;
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
-  final VoidCallback onUserTap;
   final VoidCallback onLocationTap;
 
   const PostCard({
@@ -18,15 +32,14 @@ class PostCard extends StatefulWidget {
     required this.onLike,
     required this.onComment,
     required this.onShare,
-    required this.onUserTap,
     required this.onLocationTap,
   });
 
   @override
-  State<PostCard> createState() => _PostCardState();
+  ConsumerState<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> {
+class _PostCardState extends ConsumerState<PostCard> {
   bool _isExpanded = false;
   final int _maxLines = 3;
 
@@ -47,15 +60,18 @@ class _PostCardState extends State<PostCard> {
               imageUrl: widget.post.user.avatarUrl,
               name: widget.post.user.username,
               size: 44,
-              onTap: widget.onUserTap,
+              onTap: () => context.push('/users/${widget.post.user.id}/profile'),
             ),
             title: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    widget.post.user.username,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
+                  child: GestureDetector(
+                    onTap: () => context.push('/users/${widget.post.user.id}/profile'),
+                    child: Text(
+                      widget.post.user.username,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -76,12 +92,7 @@ class _PostCardState extends State<PostCard> {
                 ),
               ],
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.more_vert),
-              onPressed: () {
-                // TODO: Show options menu
-              },
-            ),
+            trailing: _buildHeaderActions(context),
           ),
 
           // Title (if exists)
@@ -206,15 +217,118 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  Widget _buildHeaderActions(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+    final postUserId = widget.post.user.id;
+    
+    // Debug: Log user IDs
+    log('PostCard - Current user ID: ${authState.user?.id}, Post user ID: $postUserId');
+    
+    // Compare user IDs as strings to handle UUID format differences
+    final isCurrentUser = authState.user?.id != null && 
+                          postUserId.isNotEmpty &&
+                          authState.user!.id.toString() == postUserId.toString();
+
+    if (isCurrentUser) {
+      return IconButton(
+        icon: const Icon(Icons.more_vert),
+        onPressed: () {
+          // TODO: Show options menu (edit, delete, etc.)
+        },
+      );
+    }
+
+    // Show follow button for all non-current users
+    // If userId is invalid, the follow controller will handle errors gracefully
+    final followState = postUserId.isNotEmpty
+        ? ref.watch(followControllerProvider(postUserId))
+        : FollowState();
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (followState.isLoading)
+          const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          TextButton(
+            onPressed: followState.isLoading
+                ? null
+                : () async {
+                    try {
+                      await ref
+                          .read(followControllerProvider(widget.post.user.id).notifier)
+                          .toggleFollow();
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to ${followState.isFollowing ? 'unfollow' : 'follow'} user. Please try again.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              followState.isFollowing ? 'Following' : 'Follow',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: followState.isFollowing
+                    ? Theme.of(context).colorScheme.outline
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        IconButton(
+          icon: const Icon(Icons.more_vert),
+          onPressed: () {
+            // TODO: Show options menu (report, etc.)
+          },
+        ),
+      ],
+    );
+  }
+
   Widget _buildPhotoGrid(int photoCount) {
     final photos = widget.post.step.photos;
+    final locationName = widget.post.step.location.name ?? 
+                         widget.post.step.location.city ?? 
+                         widget.post.step.location.country ?? 
+                         '';
+
+    void _showImageViewer(int initialIndex) {
+      final imageUrls = photos.map((p) => p.url).toList();
+      final locationNames = List<String>.generate(
+        imageUrls.length,
+        (_) => locationName,
+      );
+      SimpleImageViewer.show(
+        context,
+        imageUrls: imageUrls,
+        initialIndex: initialIndex,
+        locationNames: locationNames,
+      );
+    }
 
     if (photoCount == 1) {
-      return AspectRatio(
-        aspectRatio: photos[0].ratio,
-        child: AppNetworkImage(
-          imageUrl: photos[0].url,
-          width: double.infinity,
+      return GestureDetector(
+        onTap: () => _showImageViewer(0),
+        child: AspectRatio(
+          aspectRatio: photos[0].ratio,
+          child: AppNetworkImage(
+            imageUrl: _buildImageUrl(photos[0].url),
+            width: double.infinity,
+          ),
         ),
       );
     }
@@ -223,16 +337,26 @@ class _PostCardState extends State<PostCard> {
       return Row(
         children: [
           Expanded(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: AppNetworkImage(imageUrl: photos[0].url),
+            child: GestureDetector(
+              onTap: () => _showImageViewer(0),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: AppNetworkImage(
+                  imageUrl: _buildImageUrl(photos[0].url),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 2),
           Expanded(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: AppNetworkImage(imageUrl: photos[1].url),
+            child: GestureDetector(
+              onTap: () => _showImageViewer(1),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: AppNetworkImage(
+                  imageUrl: _buildImageUrl(photos[1].url),
+                ),
+              ),
             ),
           ),
         ],
@@ -242,40 +366,58 @@ class _PostCardState extends State<PostCard> {
     // 3+ photos
     return Column(
       children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: AppNetworkImage(imageUrl: photos[0].url),
+        GestureDetector(
+          onTap: () => _showImageViewer(0),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: AppNetworkImage(
+              imageUrl: _buildImageUrl(photos[0].url),
+            ),
+          ),
         ),
         const SizedBox(height: 2),
         Row(
           children: [
             Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: AppNetworkImage(imageUrl: photos[1].url),
+              child: GestureDetector(
+                onTap: () => _showImageViewer(1),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: AppNetworkImage(
+                    imageUrl: _buildImageUrl(photos[1].url),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 2),
             Expanded(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    AppNetworkImage(imageUrl: photos[2].url),
-                    if (photoCount > 3)
-                      Container(
-                        color: Colors.black54,
-                        child: Center(
-                          child: Text(
-                            '+${photoCount - 3}',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  color: Colors.white,
-                                ),
+              child: GestureDetector(
+                onTap: () => _showImageViewer(2),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AppNetworkImage(
+                        imageUrl: _buildImageUrl(photos[2].url),
+                      ),
+                      if (photoCount > 3)
+                        Container(
+                          color: Colors.black54,
+                          child: Center(
+                            child: Text(
+                              '+${photoCount - 3}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

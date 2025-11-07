@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiClient {
   static const String _baseUrl = 'http://localhost:8089/app-backend';
+  static const String baseUrl = _baseUrl;
   static const String _storageAccessTokenKey = 'access_token';
   static const String _storageRefreshTokenKey = 'refresh_token';
   

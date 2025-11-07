@@ -1,6 +1,10 @@
+import 'dart:developer';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:travel_diary_frontend/core/data/fake_data.dart';
 import 'package:travel_diary_frontend/feed/data/models/feed_post.dart';
+import 'package:travel_diary_frontend/post/data/models/post.dart';
+import 'package:travel_diary_frontend/post/data/repositories/post_repository.dart';
+import 'package:travel_diary_frontend/trips/data/models/step_post.dart';
+import 'package:travel_diary_frontend/trips/data/models/media.dart';
 
 class FeedState {
   final List<FeedPost> posts;
@@ -35,6 +39,8 @@ class FeedState {
 }
 
 class FeedController extends StateNotifier<FeedState> {
+  final PostRepository _repository = PostRepository();
+
   FeedController() : super(FeedState()) {
     loadInitial();
   }
@@ -43,17 +49,18 @@ class FeedController extends StateNotifier<FeedState> {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      final posts = FakeData.feedPosts;
+      final posts = await _repository.getPublicPosts();
+      log('Loaded ${posts.length} public posts');
+      final feedPosts = posts.map(_convertPostToFeedPost).toList();
       
       state = state.copyWith(
-        posts: posts,
+        posts: feedPosts,
         isLoading: false,
         currentPage: 1,
-        hasMore: true,
+        hasMore: feedPosts.length >= 10, // Assume more if we got 10+ posts
       );
     } catch (e) {
+      log('Error loading feed: $e');
       state = state.copyWith(
         error: e.toString(),
         isLoading: false,
@@ -67,18 +74,17 @@ class FeedController extends StateNotifier<FeedState> {
     state = state.copyWith(isLoading: true);
     
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
+      final posts = await _repository.getPublicPosts();
+      final feedPosts = posts.map(_convertPostToFeedPost).toList();
       
-      final morePosts = FakeData.getMoreFeedPosts(state.currentPage + 1);
-      
-      // For demo, stop after 2 pages
       state = state.copyWith(
-        posts: [...state.posts, ...morePosts],
+        posts: [...state.posts, ...feedPosts],
         isLoading: false,
         currentPage: state.currentPage + 1,
-        hasMore: state.currentPage < 1,
+        hasMore: false,
       );
     } catch (e) {
+      log('Error loading more feed: $e');
       state = state.copyWith(
         error: e.toString(),
         isLoading: false,
@@ -91,23 +97,50 @@ class FeedController extends StateNotifier<FeedState> {
     await loadInitial();
   }
 
-  Future<void> likePost(String postId) async {
-    // In real app, call API
-    final updatedPosts = state.posts.map((post) {
-      if (post.step.id == postId) {
-        return post.copyWith(
-          step: post.step.copyWith(
-            isLiked: !post.step.isLiked,
-            likesCount: post.step.isLiked 
-                ? post.step.likesCount - 1 
-                : post.step.likesCount + 1,
-          ),
-        );
-      }
-      return post;
-    }).toList();
+  FeedPost _convertPostToFeedPost(Post post) {
+    final photos = post.media.map((m) => Media(
+      id: m.id,
+      url: m.url,
+      type: m.type,
+    )).toList();
+
+    final stepPost = StepPost(
+      id: post.id,
+      tripId: post.tripId,
+      text: post.text,
+      location: LocationData(
+        lat: post.latitude ?? 0.0,
+        lng: post.longitude ?? 0.0,
+        name: post.city ?? post.country ?? 'Unknown',
+        city: post.city,
+        country: post.country,
+      ),
+      takenAt: post.ts,
+      photos: photos,
+      visibility: post.visibility,
+      likesCount: 0,
+      commentsCount: 0,
+      isLiked: false,
+      createdAt: post.ts,
+    );
+
+    // Use userId (UUID) - required for follow operations
+    if (post.userId == null || post.userId!.isEmpty) {
+      log('Error: Post ${post.id} missing userId, cannot create FeedUser');
+      throw Exception('Post missing userId');
+    }
     
-    state = state.copyWith(posts: updatedPosts);
+    final feedUser = FeedUser(
+      id: post.userId!, 
+      username: post.username,
+      avatarUrl: null,
+    );
+
+    return FeedPost(
+      step: stepPost,
+      user: feedUser,
+      tripTitle: 'Trip', // Could fetch trip title if needed
+    );
   }
 }
 

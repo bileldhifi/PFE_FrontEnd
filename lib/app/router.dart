@@ -9,6 +9,7 @@ import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/modern_profile_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/edit_profile_screen.dart';
+import 'package:travel_diary_frontend/profile/presentation/user_profile_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
 import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -183,6 +184,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             return const LoginScreen();
           }
           return EditProfileScreen(user: currentUser);
+        },
+      ),
+      GoRoute(
+        path: '/users/:userId/profile',
+        builder: (context, state) {
+          final userId = state.pathParameters['userId']!;
+          return UserProfileScreen(userId: userId);
         },
       ),
     ],
