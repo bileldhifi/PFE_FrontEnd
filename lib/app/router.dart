@@ -5,11 +5,13 @@ import 'package:travel_diary_frontend/auth/presentation/login_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/register_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/change_password_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
+import 'package:travel_diary_frontend/feed/presentation/screens/post_detail_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
 import 'package:travel_diary_frontend/map/presentation/map_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/modern_profile_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/edit_profile_screen.dart';
 import 'package:travel_diary_frontend/profile/presentation/user_profile_screen.dart';
+import 'package:travel_diary_frontend/notifications/presentation/screens/notification_screen.dart';
 import 'package:travel_diary_frontend/search/presentation/search_screen.dart';
 import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,6 +193,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final userId = state.pathParameters['userId']!;
           return UserProfileScreen(userId: userId);
+        },
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationScreen(),
+      ),
+      GoRoute(
+        path: '/posts/:postId',
+        builder: (context, state) {
+          final postId = state.pathParameters['postId']!;
+          return PostDetailScreen(postId: postId);
         },
       ),
     ],

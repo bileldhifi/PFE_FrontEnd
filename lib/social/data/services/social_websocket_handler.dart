@@ -9,7 +9,7 @@ import 'package:travel_diary_frontend/social/presentation/controllers/comment_co
 
 /// Handler for social-related WebSocket messages (likes, comments)
 class SocialWebSocketHandler implements WebSocketMessageHandler {
-  final WidgetRef ref;
+  final Ref ref;
 
   SocialWebSocketHandler(this.ref);
 

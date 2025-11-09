@@ -21,6 +21,9 @@ class WebSocketService {
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
   static const Duration _reconnectDelay = Duration(seconds: 5);
+  
+  // Track active subscriptions to re-subscribe on reconnect
+  final Set<String> _activeSubscriptions = {};
 
   /// Stream of all incoming messages
   Stream<WebSocketMessage> get messages => _messageController.stream;
@@ -78,6 +81,12 @@ class WebSocketService {
       _isConnected = true;
       _reconnectAttempts = 0;
       log('WebSocket connected successfully');
+      
+      // Small delay to ensure connection is fully established
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Re-subscribe to all active subscriptions
+      _resubscribeAll();
     } catch (e) {
       log('Failed to connect WebSocket: $e');
       _isConnected = false;
@@ -182,8 +191,11 @@ class WebSocketService {
 
   /// Subscribe to a topic/destination
   void subscribe(String destination, {String? subscriptionId}) {
+    // Track subscription even if not connected (will subscribe on connect)
+    _activeSubscriptions.add(destination);
+    
     if (!_isConnected) {
-      log('Cannot subscribe: WebSocket not connected');
+      log('WebSocket not connected, subscription queued: $destination');
       return;
     }
 
@@ -236,6 +248,37 @@ class WebSocketService {
     _channel?.sink.add(message);
   }
 
+  /// Re-subscribe to all active subscriptions
+  void _resubscribeAll() {
+    if (_activeSubscriptions.isEmpty) {
+      log('No active subscriptions to restore');
+      return;
+    }
+    
+    log('Re-subscribing to ${_activeSubscriptions.length} topics...');
+    for (final destination in _activeSubscriptions) {
+      final id = 'sub-${destination.hashCode}';
+      final subscribeMessage = jsonEncode([
+        'SUBSCRIBE',
+        {
+          'id': id,
+          'destination': destination,
+        },
+        ''
+      ]);
+      _channel?.sink.add(subscribeMessage);
+      log('Re-subscribed to: $destination');
+    }
+  }
+  
+  /// Get list of active subscriptions
+  Set<String> get activeSubscriptions => Set.unmodifiable(_activeSubscriptions);
+  
+  /// Clear all subscriptions
+  void clearSubscriptions() {
+    _activeSubscriptions.clear();
+  }
+
   /// Disconnect from WebSocket server
   void disconnect() {
     _reconnectTimer?.cancel();
@@ -244,7 +287,7 @@ class WebSocketService {
     _currentToken = null;
     _baseUrl = null;
     _reconnectAttempts = 0;
-    _handlerRegistry.clear();
+    // Don't clear handlers or subscriptions on disconnect - they'll be restored on reconnect
     log('WebSocket disconnected');
   }
 

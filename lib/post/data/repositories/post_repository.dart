@@ -178,5 +178,15 @@ class PostRepository {
       throw Exception('Failed to fetch following posts: $e');
     }
   }
+
+  Future<Post> getPostById(String postId) async {
+    try {
+      final response = await _apiClient.get('/posts/$postId');
+      return Post.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      log('Error fetching post $postId: $e', error: e);
+      throw Exception('Failed to fetch post: $e');
+    }
+  }
 }
 
