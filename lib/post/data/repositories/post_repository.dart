@@ -136,6 +136,11 @@ class PostRepository {
   Future<List<Post>> getPublicPosts({
     String? country,
     String? city,
+    double? minLat,
+    double? maxLat,
+    double? minLon,
+    double? maxLon,
+    int? limit,
   }) async {
     try {
       final queryParams = <String, dynamic>{};
@@ -144,6 +149,17 @@ class PostRepository {
       }
       if (city != null && city.isNotEmpty) {
         queryParams['city'] = city;
+      }
+      if (minLat != null && maxLat != null) {
+        queryParams['minLat'] = minLat;
+        queryParams['maxLat'] = maxLat;
+      }
+      if (minLon != null && maxLon != null) {
+        queryParams['minLon'] = minLon;
+        queryParams['maxLon'] = maxLon;
+      }
+      if (limit != null) {
+        queryParams['limit'] = limit;
       }
 
       final response = await _apiClient.get(

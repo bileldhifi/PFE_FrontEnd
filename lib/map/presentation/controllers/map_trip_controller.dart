@@ -1,6 +1,4 @@
-import 'dart:math';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -8,6 +6,7 @@ import '../../data/trip_route_repository.dart';
 import '../../../trips/data/models/trip.dart';
 import '../../../trips/data/models/track_point.dart';
 import '../../../post/data/repositories/post_repository.dart';
+import '../utils/marker_image_utils.dart';
 
 /// Controller for managing trip route visualization on the map
 class MapTripController {
@@ -158,7 +157,7 @@ class MapTripController {
       }
       
       // Create a circular image with border (smaller size for better map appearance)
-      final imageBytes = await _createCircularImageWithBorder(
+      final imageBytes = await createCircularImageWithBorder(
         response.bodyBytes,
         size: 80,
         borderWidth: 6,
@@ -223,84 +222,6 @@ class MapTripController {
     }
   }
   
-  /// Create a circular image with white border (like Snapchat)
-  Future<Uint8List> _createCircularImageWithBorder(
-    Uint8List imageBytes, {
-    required int size,
-    required int borderWidth,
-  }) async {
-    // Decode the image
-    final ui.Codec codec = await ui.instantiateImageCodec(imageBytes);
-    final ui.FrameInfo frameInfo = await codec.getNextFrame();
-    final ui.Image sourceImage = frameInfo.image;
-    
-    // Create a canvas to draw on
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    final paint = ui.Paint();
-    
-    final double radius = size / 2.0;
-    final double center = radius;
-    
-    // Draw outer white border circle
-    final borderPaint = ui.Paint()
-      ..color = const ui.Color(0xFFFFFFFF)
-      ..style = ui.PaintingStyle.fill;
-    canvas.drawCircle(
-      ui.Offset(center, center),
-      radius,
-      borderPaint,
-    );
-    
-    // Draw inner circle with image
-    final innerRadius = radius - borderWidth;
-    canvas.save();
-    canvas.clipPath(
-      ui.Path()..addOval(
-        ui.Rect.fromCircle(
-          center: ui.Offset(center, center),
-          radius: innerRadius,
-        ),
-      ),
-    );
-    
-    // Draw the image to fill the circle
-    canvas.drawImageRect(
-      sourceImage,
-      ui.Rect.fromLTWH(
-        0,
-        0,
-        sourceImage.width.toDouble(),
-        sourceImage.height.toDouble(),
-      ),
-      ui.Rect.fromCircle(
-        center: ui.Offset(center, center),
-        radius: innerRadius,
-      ),
-      paint,
-    );
-    
-    canvas.restore();
-    
-    // Add orange accent ring (thinner for smaller markers)
-    final accentPaint = ui.Paint()
-      ..color = const ui.Color(0xFFFF6B35)
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawCircle(
-      ui.Offset(center, center),
-      radius - borderWidth / 2,
-      accentPaint,
-    );
-    
-    // Convert to image bytes
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(size, size);
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-    
-    return byteData!.buffer.asUint8List();
-  }
-
   /// Display a single trip route on the map
   Future<void> _displayTripRoute(Trip trip, int colorIndex) async {
     try {
@@ -736,16 +657,16 @@ class MapTripController {
     final double dLon = _degreesToRadians(lon2 - lon1);
     
     final double a = 
-        sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) * 
-        sin(dLon / 2) * sin(dLon / 2);
-    
-    final double c = 2 * asin(sqrt(a));
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) * 
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+
+    final double c = 2 * math.asin(math.sqrt(a));
     
     return earthRadius * c;
   }
 
-  double _degreesToRadians(double degrees) => degrees * (pi / 180);
+  double _degreesToRadians(double degrees) => degrees * (math.pi / 180);
 }
 
 /// Click listener for media markers (circles)

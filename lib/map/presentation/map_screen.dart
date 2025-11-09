@@ -1,7 +1,10 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import '../../core/env/mapbox_config.dart';
 import '../../core/widgets/loading_widget.dart';
 import '../../core/widgets/error_widget.dart';
@@ -9,6 +12,9 @@ import '../../core/network/api_client.dart';
 import '../data/trip_route_repository.dart';
 import '../presentation/controllers/map_trip_controller.dart';
 import '../../auth/data/repo/auth_repository.dart';
+import '../../post/data/repositories/post_repository.dart';
+import '../../post/data/models/post.dart';
+import 'utils/marker_image_utils.dart';
 
 /// Main map screen for displaying trip routes and locations
 class MapScreen extends StatefulWidget {
@@ -30,6 +36,10 @@ class _MapScreenState extends State<MapScreen> {
   MapTripController? _tripController;
   bool _showTripRoutes = true; // Always show routes by default
   String _trackPointDensity = 'high'; // High density by default for better visibility
+  bool _showDiscover = false;
+  final PostRepository _publicPostRepository = PostRepository();
+  final List<_PublicMarker> _publicPostMarkers = [];
+  bool _isLoadingPublicPosts = false;
   
   // Authentication
   final AuthRepository _authRepository = AuthRepository();
@@ -43,6 +53,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _tripController?.clearAllAnnotations();
+    _clearPublicMarkers();
     _mapboxMap?.dispose();
     super.dispose();
   }
@@ -128,7 +139,11 @@ class _MapScreenState extends State<MapScreen> {
     if (!mounted || route == null || !route.isCurrent) return;
 
     setState(() => _isMapReady = true);
-    _loadTripRoutes();
+    if (_showDiscover) {
+      _loadPublicPostsMarkers();
+    } else {
+      _loadTripRoutes();
+    }
   });
 }
 
@@ -228,6 +243,161 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Future<void> _onViewModeChanged(bool discover) async {
+    if (_showDiscover == discover) return;
+
+    setState(() {
+      _showDiscover = discover;
+      _showTripRoutes = !discover;
+    });
+
+    await _tripController?.clearAllAnnotations();
+    await _clearPublicMarkers();
+
+    if (discover) {
+      await _loadPublicPostsMarkers();
+    } else {
+      await _loadTripRoutes();
+    }
+  }
+
+  Future<void> _loadPublicPostsMarkers() async {
+    if (_mapboxMap == null) return;
+
+    setState(() {
+      _isLoadingPublicPosts = true;
+    });
+
+    try {
+      await _clearPublicMarkers();
+      final posts = await _publicPostRepository.getPublicPosts(limit: 200);
+      for (final post in posts) {
+        await _addPublicPostMarker(post);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load discover posts: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingPublicPosts = false;
+      });
+    }
+  }
+
+  Future<void> _addPublicPostMarker(Post post) async {
+    if (_mapboxMap == null) return;
+    if (post.latitude == null || post.longitude == null) return;
+    if (post.media.isEmpty) return;
+
+    final imageUrl = _resolveImageUrl(post.media.first.url);
+    final trackPointId = post.trackPointId;
+    final locationName = post.city ?? post.country ?? 'Unknown location';
+
+    try {
+      final response = await http.get(Uri.parse(imageUrl));
+      if (response.statusCode != 200) {
+        return;
+      }
+
+      final imageBytes = await createCircularImageWithBorder(
+        response.bodyBytes,
+        size: 80,
+        borderWidth: 6,
+      );
+
+      final imageId = 'discover_marker_${post.id}';
+      final mbxImage = MbxImage(
+        width: 80,
+        height: 80,
+        data: imageBytes,
+      );
+
+      await _mapboxMap!.style.addStyleImage(
+        imageId,
+        1.0,
+        mbxImage,
+        false,
+        [],
+        [],
+        null,
+      );
+
+      final manager =
+          await _mapboxMap!.annotations.createPointAnnotationManager();
+
+      await manager.create(
+        PointAnnotationOptions(
+          geometry: Point(
+            coordinates: Position(
+              post.longitude!,
+              post.latitude!,
+            ),
+          ),
+          iconImage: imageId,
+          iconSize: 0.9,
+          iconAnchor: IconAnchor.CENTER,
+        ),
+      );
+
+      manager.addOnPointAnnotationClickListener(
+        _PublicPostMarkerClickListener(
+          postId: post.id,
+          trackPointId: trackPointId,
+          locationName: locationName,
+          onTap: _handlePublicPostTap,
+        ),
+      );
+
+      _publicPostMarkers.add(
+        _PublicMarker(
+          manager: manager,
+          imageId: imageId,
+          postId: post.id,
+          trackPointId: trackPointId,
+          locationName: locationName,
+        ),
+      );
+    } catch (e) {
+      print('Error adding public post marker: $e');
+    }
+  }
+
+  Future<void> _clearPublicMarkers() async {
+    if (_mapboxMap == null) return;
+
+    for (final marker in _publicPostMarkers) {
+      try {
+        await _mapboxMap!.annotations.removeAnnotationManager(marker.manager);
+      } catch (_) {}
+      try {
+        await _mapboxMap!.style.removeStyleImage(marker.imageId);
+      } catch (_) {}
+    }
+    _publicPostMarkers.clear();
+  }
+
+  void _handlePublicPostTap(String postId, int? trackPointId, String locationName) {
+    if (!mounted) return;
+    if (trackPointId != null) {
+      _onMarkerTap(trackPointId, locationName);
+    } else {
+      context.push('/posts/$postId');
+    }
+  }
+
+  String _resolveImageUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    return '${ApiClient.baseUrl}$url';
+  }
+
   /// Debug method to show all track points
   Future<void> _debugTrackPoints() async {
     if (_tripController == null) return;
@@ -279,6 +449,8 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final safeTop = MediaQuery.of(context).padding.top;
+    final toggleTop = safeTop + 96;
     return Scaffold(
       body: Stack(
         children: [
@@ -332,71 +504,40 @@ class _MapScreenState extends State<MapScreen> {
               onMapCreated: _onMapCreated,
             ),
           
-          // Location button - keep in stack
           if (_isMapReady && !_isLoading && _error == null)
-            Positioned(
-              bottom: 20,
-              right: 20,
-              child: FloatingActionButton(
-                heroTag: 'location_btn', // Unique hero tag
-                onPressed: _onLocationPressed,
-                backgroundColor: Colors.white,
-                child: const Icon(Icons.my_location, color: Colors.blue),
-              ),
-            ),
-            
-          // Map style indicator
-          if (_isMapReady && !_isLoading && _error == null)
-            Positioned(
-              top: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  _getMapStyleName(_currentMapStyle),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-            
-            // Custom Top Bar (inspired by Snapchat map style)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: _CustomMapTopBar(
-                onBackPressed: () => context.pop(),
-                onSettingsPressed: () => _showMapSettings(context),
+              child: _MapHeader(
+                styleName: _getMapStyleName(_currentMapStyle),
+                onBack: () => context.pop(),
               ),
             ),
-            
-            // Create Post Button - center bottom position
-            if (_isMapReady && !_isLoading && _error == null)
-              Positioned(
-                bottom: 30,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _CreatePostButton(
-                    onPressed: () => _onCreatePostPressed(),
-                  ),
-                ),
+
+          if (_isMapReady && !_isLoading && _error == null)
+            Positioned(
+  top: toggleTop,
+  right: 20,
+  child: StylizedButtonColumn(
+    showDiscover: _showDiscover,
+    onModeChanged: _onViewModeChanged,
+    onCreatePost: _showDiscover ? null : _onCreatePostPressed,
+    onSettings: () => _showMapSettings(context),
+    onLocation: _onLocationPressed,
+  ),
+),
+
+
+          if (_showDiscover && _isLoadingPublicPosts)
+            Positioned(
+              top: toggleTop + 150,
+              right: 20,
+              child: const SizedBox(
+                width: 64,
+                child: LinearProgressIndicator(),
               ),
+            ),
         ],
       ),
     );
@@ -592,72 +733,94 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-/// Custom top bar for map screen (Snapchat-inspired)
-class _CustomMapTopBar extends StatelessWidget {
-  final VoidCallback onBackPressed;
-  final VoidCallback onSettingsPressed;
 
-  const _CustomMapTopBar({
-    required this.onBackPressed,
-    required this.onSettingsPressed,
+
+
+
+
+
+
+
+class _PublicMarker {
+  final PointAnnotationManager manager;
+  final String imageId;
+  final String postId;
+  final int? trackPointId;
+  final String locationName;
+
+  _PublicMarker({
+    required this.manager,
+    required this.imageId,
+    required this.postId,
+    required this.trackPointId,
+    required this.locationName,
+  });
+}
+
+class _PublicPostMarkerClickListener extends OnPointAnnotationClickListener {
+  final String postId;
+  final int? trackPointId;
+  final String locationName;
+  final void Function(String postId, int? trackPointId, String locationName) onTap;
+
+  _PublicPostMarkerClickListener({
+    required this.postId,
+    required this.trackPointId,
+    required this.locationName,
+    required this.onTap,
+  });
+
+  @override
+  void onPointAnnotationClick(PointAnnotation annotation) {
+    onTap(postId, trackPointId, locationName);
+  }
+}
+
+class _MapHeader extends StatelessWidget {
+  final String styleName;
+  final VoidCallback onBack;
+
+  const _MapHeader({
+    required this.styleName,
+    required this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final top = MediaQuery.of(context).padding.top;
+    return Padding(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
+        top: top + 8,
         left: 16,
         right: 16,
         bottom: 12,
       ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.6),
-            Colors.black.withOpacity(0.4),
-            Colors.black.withOpacity(0.2),
-            Colors.transparent,
-          ],
-          stops: const [0.0, 0.5, 0.8, 1.0],
-        ),
-      ),
       child: Row(
         children: [
-          // Back button (left)
-          _TopBarButton(
-            icon: Icons.arrow_back,
-            onPressed: onBackPressed,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _TopBarButton(
+                icon: Icons.arrow_back,
+                onPressed: onBack,
+              ),
+            ),
           ),
-          
-          // Title (center)
           Expanded(
             child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
+              child: _FrostedPill(
+                borderRadius: 20,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                 child: const Text(
                   'Map',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.25,
                     shadows: [
                       Shadow(
-                        color: Colors.black45,
+                        color: Colors.black38,
                         blurRadius: 8,
                       ),
                     ],
@@ -666,11 +829,29 @@ class _CustomMapTopBar extends StatelessWidget {
               ),
             ),
           ),
-          
-          // Settings button (right)
-          _TopBarButton(
-            icon: Icons.settings,
-            onPressed: onSettingsPressed,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _FrostedPill(
+                borderRadius: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                child: Text(
+                  styleName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black26,
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -678,119 +859,259 @@ class _CustomMapTopBar extends StatelessWidget {
   }
 }
 
-/// Top bar button widget
+/// Vertical segmented toggle with sliding thumb.
+class VerticalSegmentedToggle extends StatelessWidget {
+  final bool discover;
+  final ValueChanged<bool> onChanged;
+  final double width;
+  final double segmentHeight;
+
+  const VerticalSegmentedToggle({
+    required this.discover,
+    required this.onChanged,
+    this.width = 48,
+    this.segmentHeight = 48,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return _FrostedPill(
+      borderRadius: 24,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ToggleSegment(
+            icon: Icons.person_pin_circle,
+            active: !discover,
+            activeColor: primary,
+            onTap: () => onChanged(false),
+          ),
+          const SizedBox(height: 10),
+          _ToggleSegment(
+            icon: Icons.public,
+            active: discover,
+            activeColor: primary,
+            onTap: () => onChanged(true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Updated column of right-side controls that uses the sliding toggle.
+/// Accepts callbacks for mode change, create post, settings and location.
+class StylizedButtonColumn extends StatelessWidget {
+  final bool showDiscover;
+  final ValueChanged<bool> onModeChanged;
+  final VoidCallback? onCreatePost;
+  final VoidCallback? onSettings;
+  final VoidCallback? onLocation;
+
+  const StylizedButtonColumn({
+    required this.showDiscover,
+    required this.onModeChanged,
+    this.onCreatePost,
+    this.onSettings,
+    this.onLocation,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+
+    if (onSettings != null) {
+      children.addAll([
+        _TopBarButton(
+          icon: Icons.settings,
+          onPressed: onSettings!,
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+
+    children.addAll([
+      VerticalSegmentedToggle(
+        discover: showDiscover,
+        onChanged: onModeChanged,
+      ),
+    ]);
+
+    if (onCreatePost != null) {
+      children.addAll([
+        const SizedBox(height: 12),
+        _TopBarButton(
+          icon: Icons.add_a_photo_rounded,
+          onPressed: onCreatePost!,
+        ),
+      ]);
+    }
+
+    if (onLocation != null) {
+      children.addAll([
+        const SizedBox(height: 12),
+        _TopBarButton(
+          icon: Icons.my_location,
+          onPressed: onLocation!,
+        ),
+      ]);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
+    );
+  }
+}
+
+/// Top small circular button used for settings/back.
+/// Now includes optional label below the icon for clarity.
 class _TopBarButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
+  final String? label;
 
   const _TopBarButton({
     required this.icon,
     required this.onPressed,
+    this.label,
+    super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.25),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withOpacity(0.4),
-          width: 1.5,
+    return Column(
+      children: [
+        _FrostedPill(
+          borderRadius: 23,
+          width: 46,
+          height: 46,
+          child: IconButton(
+            onPressed: onPressed,
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              splashFactory: NoSplash.splashFactory,
+              backgroundColor: Colors.transparent,
+            ),
+            icon: Icon(icon, size: 22, color: Colors.white),
+          ),
         ),
+        if (label != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            label!,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ToggleSegment extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _ToggleSegment({
+    required this.icon,
+    required this.active,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: active ? Colors.white.withOpacity(0.24) : Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Colors.white, width: active ? 2.2 : 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: active
+                    ? activeColor.withOpacity(0.35)
+                    : Colors.black.withOpacity(0.2),
+                blurRadius: active ? 16 : 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
+class _FrostedPill extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final double borderRadius;
+  final double? width;
+  final double? height;
+
+  const _FrostedPill({
+    required this.child,
+    this.padding,
+    this.borderRadius = 20,
+    this.width,
+    this.height,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final container = Container(
+      padding: padding,
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: Colors.white.withOpacity(0.55), width: 1.5),
+      ),
+      child: child,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: IconButton(
-        icon: Icon(icon),
-        color: Colors.white,
-        iconSize: 22,
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          shape: const CircleBorder(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: container,
         ),
       ),
     );
   }
 }
 
-/// Create Post Button - Modern floating design
-class _CreatePostButton extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _CreatePostButton({
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 24,
-          vertical: 14,
-        ),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.blue.shade600,
-              Colors.purple.shade600,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: Colors.purple.withOpacity(0.3),
-              blurRadius: 15,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.add_a_photo_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Create Post',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
