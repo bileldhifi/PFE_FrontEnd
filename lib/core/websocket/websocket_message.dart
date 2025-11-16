@@ -39,14 +39,10 @@ extension WebSocketMessageTypeExtension on String {
         return WebSocketMessageType.comment;
       case 'NOTIFICATION':
         return WebSocketMessageType.notification;
-      case 'CHAT':
-      case '/topic/chat/':
-        return WebSocketMessageType.chat;
-      case 'TYPING':
-        return WebSocketMessageType.typing;
-      case 'ONLINE_STATUS':
-        return WebSocketMessageType.online;
       default:
+        if (startsWith('/topic/dm/')) {
+          return WebSocketMessageType.chat;
+        }
         return WebSocketMessageType.unknown;
     }
   }

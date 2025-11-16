@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../../auth/data/models/user.dart';
 import '../../../core/network/network_service.dart';
+import '../dtos/profile_travel_stats.dart';
 import '../dtos/update_profile_request.dart';
 
 class ProfileRepository {
@@ -45,6 +46,25 @@ class ProfileRepository {
       } else if (e.response?.statusCode == 404) {
         throw Exception('User not found.');
       }
+      throw _handleProfileError(e);
+    }
+  }
+
+  /// Get aggregated travel stats for a user
+  Future<ProfileTravelStats> getTravelStats(String userId) async {
+    try {
+      final response =
+          await _apiClient.get<Map<String, dynamic>>('/users/$userId/travel-stats');
+
+      if (response.statusCode == 200 && response.data != null) {
+        return ProfileTravelStats.fromJson(response.data!);
+      } else {
+        throw DioException(
+          requestOptions: response.requestOptions,
+          error: 'Failed to load travel stats',
+        );
+      }
+    } on DioException catch (e) {
       throw _handleProfileError(e);
     }
   }

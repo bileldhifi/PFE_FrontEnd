@@ -35,10 +35,7 @@ class NotificationState {
 class NotificationController extends StateNotifier<NotificationState> {
   final NotificationRepository _repository = NotificationRepository();
 
-  NotificationController() : super(NotificationState()) {
-    loadNotifications();
-    loadUnreadCount();
-  }
+  NotificationController() : super(NotificationState());
 
   Future<void> loadNotifications() async {
     state = state.copyWith(isLoading: true, error: null);

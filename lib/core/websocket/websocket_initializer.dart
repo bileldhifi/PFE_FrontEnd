@@ -4,6 +4,7 @@ import 'package:travel_diary_frontend/auth/presentation/controllers/auth_control
 import 'package:travel_diary_frontend/core/websocket/websocket_manager.dart';
 import 'package:travel_diary_frontend/social/data/services/social_websocket_handler.dart';
 import 'package:travel_diary_frontend/notifications/data/services/notification_websocket_handler.dart';
+import 'package:travel_diary_frontend/messages/data/services/direct_message_websocket_handler.dart';
 
 /// Centralized WebSocket initialization
 /// This ensures handlers are registered once and subscriptions persist
@@ -29,11 +30,13 @@ class WebSocketInitializer {
     // Register all handlers once (even if not connected yet)
     final socialHandler = SocialWebSocketHandler(ref);
     final notificationHandler = NotificationWebSocketHandler(ref);
+    final dmHandler = DirectMessageWebSocketHandler(ref);
     
     manager.service.registerHandler(socialHandler);
     manager.service.registerHandler(notificationHandler);
+    manager.service.registerHandler(dmHandler);
     
-    log('Registered WebSocket handlers: Social, Notification');
+    log('Registered WebSocket handlers: Social, Notification, DirectMessage');
     
     // Subscribe to notification topic (will be queued if not connected)
     final userId = authState.user!.id;

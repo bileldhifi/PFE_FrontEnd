@@ -84,6 +84,12 @@ class WebSocketService {
       
       // Small delay to ensure connection is fully established
       await Future.delayed(const Duration(milliseconds: 100));
+
+      _sendStompFrame('CONNECT', {
+        'accept-version': '1.1,1.2',
+        'heart-beat': '10000,10000',
+        if (_currentToken != null) 'Authorization': 'Bearer $_currentToken',
+      });
       
       // Re-subscribe to all active subscriptions
       _resubscribeAll();
@@ -96,58 +102,90 @@ class WebSocketService {
   }
 
   void _handleRawMessage(dynamic rawMessage) {
+    if (rawMessage is! String) return;
+
     try {
-      final message = _parseMessage(rawMessage);
-      if (message != null) {
-        _messageController.add(message);
-        _routeMessage(message);
+      log('[WebSocket] raw message: $rawMessage');
+
+      if (rawMessage == 'o') {
+        log('[WebSocket] connection opened');
+        return;
+      }
+
+      if (rawMessage == 'h') {
+        log('[WebSocket] heartbeat');
+        return;
+      }
+
+      if (rawMessage.startsWith('a')) {
+        final payload = rawMessage.substring(1);
+        final List<dynamic> messages = jsonDecode(payload);
+        for (final entry in messages) {
+          if (entry is String) {
+            _handleStompFrame(entry);
+          }
+        }
+        return;
+      }
+
+      if (rawMessage.startsWith('c')) {
+        log('[WebSocket] connection closed by server: $rawMessage');
+        _onConnectionLost();
+        return;
       }
     } catch (e) {
       log('Error handling WebSocket message: $e');
     }
   }
 
-  WebSocketMessage? _parseMessage(dynamic rawMessage) {
-    try {
-      final data = jsonDecode(rawMessage);
+  void _handleStompFrame(String frame) {
+    final cleaned = frame.replaceAll('\x00', '');
+    final parts = cleaned.split('\n\n');
+    final headerSection = parts.first;
+    final body = parts.length > 1 ? parts.sublist(1).join('\n\n') : '';
 
-      if (data is List && data.isNotEmpty) {
-        final frame = data[0] as String;
-        if (frame.startsWith('a[')) {
-          final payload = jsonDecode(frame.substring(2, frame.length - 1));
-          return _createMessageFromPayload(payload);
-        }
-      } else if (data is Map) {
-        return _createMessageFromPayload(data as Map<String, dynamic>);
+    final lines = headerSection.split('\n');
+    final command = lines.first.trim();
+    final headers = <String, String>{};
+    for (final line in lines.skip(1)) {
+      final idx = line.indexOf(':');
+      if (idx > 0) {
+        final key = line.substring(0, idx);
+        final value = line.substring(idx + 1);
+        headers[key] = value;
       }
-    } catch (e) {
-      log('Error parsing WebSocket message: $e');
     }
-    return null;
-  }
 
-  WebSocketMessage? _createMessageFromPayload(Map<String, dynamic> payload) {
-    final destination = payload['destination'] as String?;
-    final body = payload['body'];
-    final type = payload['type'] as String?;
+    log('[WebSocket] STOMP frame $command headers=$headers body=$body');
 
-    if (destination == null || body == null) return null;
+    if (command == 'CONNECTED') {
+      return;
+    }
 
-    final bodyMap = body is Map<String, dynamic>
-        ? body
-        : body is String
-            ? jsonDecode(body) as Map<String, dynamic>
-            : null;
+    if (command != 'MESSAGE') {
+      return;
+    }
 
-    if (bodyMap == null) return null;
+    final destination = headers['destination'];
+    if (destination == null) {
+      log('STOMP MESSAGE frame missing destination');
+      return;
+    }
 
-    return WebSocketMessage(
-      type: type ?? destination.toMessageType().name,
-      destination: destination,
-      body: bodyMap,
-      id: payload['id'] as String?,
-      headers: payload['headers'] as Map<String, String>?,
-    );
+    try {
+      final bodyMap = body.isNotEmpty ? jsonDecode(body) as Map<String, dynamic> : <String, dynamic>{};
+      final message = WebSocketMessage(
+        type: destination.toMessageType().name,
+        destination: destination,
+        body: bodyMap,
+        id: headers['message-id'],
+        headers: headers,
+      );
+      _messageController.add(message);
+      _routeMessage(message);
+    } catch (e) {
+      log('Error parsing STOMP body: $e');
+    }
   }
 
   void _routeMessage(WebSocketMessage message) {
@@ -200,16 +238,10 @@ class WebSocketService {
     }
 
     final id = subscriptionId ?? 'sub-${destination.hashCode}';
-    final subscribeMessage = jsonEncode([
-      'SUBSCRIBE',
-      {
-        'id': id,
-        'destination': destination,
-      },
-      ''
-    ]);
-
-    _channel?.sink.add(subscribeMessage);
+    _sendStompFrame('SUBSCRIBE', {
+      'id': id,
+      'destination': destination,
+    });
     log('Subscribed to: $destination');
   }
 
@@ -217,15 +249,9 @@ class WebSocketService {
   void unsubscribe(String destination) {
     if (!_isConnected) return;
 
-    final unsubscribeMessage = jsonEncode([
-      'UNSUBSCRIBE',
-      {
-        'id': 'sub-${destination.hashCode}',
-      },
-      ''
-    ]);
-
-    _channel?.sink.add(unsubscribeMessage);
+    _sendStompFrame('UNSUBSCRIBE', {
+      'id': 'sub-${destination.hashCode}',
+    });
     log('Unsubscribed from: $destination');
   }
 
@@ -236,16 +262,10 @@ class WebSocketService {
       return;
     }
 
-    final message = jsonEncode([
-      'SEND',
-      {
-        'destination': destination,
-        if (id != null) 'id': id,
-      },
-      jsonEncode(body),
-    ]);
-
-    _channel?.sink.add(message);
+    _sendStompFrame('SEND', {
+      'destination': destination,
+      if (id != null) 'id': id,
+    }, jsonEncode(body));
   }
 
   /// Re-subscribe to all active subscriptions
@@ -258,15 +278,10 @@ class WebSocketService {
     log('Re-subscribing to ${_activeSubscriptions.length} topics...');
     for (final destination in _activeSubscriptions) {
       final id = 'sub-${destination.hashCode}';
-      final subscribeMessage = jsonEncode([
-        'SUBSCRIBE',
-        {
-          'id': id,
-          'destination': destination,
-        },
-        ''
-      ]);
-      _channel?.sink.add(subscribeMessage);
+      _sendStompFrame('SUBSCRIBE', {
+        'id': id,
+        'destination': destination,
+      });
       log('Re-subscribed to: $destination');
     }
   }
@@ -289,6 +304,23 @@ class WebSocketService {
     _reconnectAttempts = 0;
     // Don't clear handlers or subscriptions on disconnect - they'll be restored on reconnect
     log('WebSocket disconnected');
+  }
+
+  void _sendStompFrame(
+      String command, Map<String, String> headers, [String body = '']) {
+    final buffer = StringBuffer()..write(command)..write('\n');
+    headers.forEach((key, value) {
+      buffer.write('$key:$value\n');
+    });
+    buffer.write('\n');
+    if (body.isNotEmpty) {
+      buffer.write(body);
+    }
+    buffer.write('\x00');
+    final frame = buffer.toString();
+    log('[WebSocket] sending frame: $frame');
+    final envelope = jsonEncode([frame]);
+    _channel?.sink.add(envelope);
   }
 
   @override

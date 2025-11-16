@@ -11,6 +11,7 @@ import 'package:travel_diary_frontend/trips/presentation/controllers/trip_list_c
 import 'package:travel_diary_frontend/notifications/presentation/controllers/notification_controller.dart';
 import 'package:travel_diary_frontend/core/websocket/websocket_manager.dart';
 import 'package:travel_diary_frontend/notifications/data/services/notification_websocket_handler.dart';
+import 'package:travel_diary_frontend/messages/presentation/controllers/conversation_list_controller.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -142,62 +143,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 ],
                               ),
                             ),
-                            // Notifications Icon with Badge
-                            Stack(
+                            Row(
                               children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.notifications_outlined,
-                                      color: Colors.white,
-                                      size: 24,
+                                _iconBadgeButton(
+                                  context,
+                                  icon: Icons.message_outlined,
+                                  onTap: () => context.push('/messages'),
+                                  countProvider:
+                                      conversationListControllerProvider.select(
+                                    (state) => state.conversations.fold<int>(
+                                      0,
+                                      (sum, item) => sum + item.unreadCount,
                                     ),
-                                    onPressed: () {
-                                      context.push('/notifications');
-                                    },
                                   ),
                                 ),
-                                // Badge
-                                Consumer(
-                                  builder: (context, ref, child) {
-                                    final notificationState =
-                                        ref.watch(notificationControllerProvider);
-                                    if (notificationState.unreadCount > 0) {
-                                      return Positioned(
-                                        right: 4,
-                                        top: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 16,
-                                            minHeight: 16,
-                                          ),
-                                          child: Text(
-                                            notificationState.unreadCount > 99
-                                                ? '99+'
-                                                : '${notificationState.unreadCount}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
+                                const SizedBox(width: 12),
+                                _iconBadgeButton(
+                                  context,
+                                  icon: Icons.notifications_outlined,
+                                  onTap: () => context.push('/notifications'),
+                                  countProvider:
+                                      notificationControllerProvider.select(
+                                    (state) => state.unreadCount,
+                                  ),
                                 ),
                               ],
                             ),
@@ -637,6 +605,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _iconBadgeButton(
+    BuildContext context, {
+    required IconData icon,
+    required VoidCallback onTap,
+    required ProviderListenable<int> countProvider,
+  }) {
+    return Stack(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(icon, color: Colors.white, size: 24),
+            onPressed: onTap,
+          ),
+        ),
+        Consumer(
+          builder: (context, ref, _) {
+            final count = ref.watch(countProvider);
+            if (count > 0) {
+              return Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints:
+                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Text(
+                    count > 99 ? '99+' : '$count',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
     );
   }
 }

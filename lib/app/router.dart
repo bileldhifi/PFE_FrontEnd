@@ -18,6 +18,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_diary_frontend/app/splash_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
 import 'package:travel_diary_frontend/profile/presentation/controllers/profile_controller.dart';
+import 'package:travel_diary_frontend/messages/presentation/screens/conversation_list_screen.dart';
+import 'package:travel_diary_frontend/messages/presentation/screens/conversation_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/my_trips_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/trip_detail_screen.dart';
@@ -198,6 +200,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationScreen(),
+      ),
+      GoRoute(
+        path: '/messages',
+        builder: (context, state) => const ConversationListScreen(),
+      ),
+      GoRoute(
+        path: '/messages/:conversationId',
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>? ?? {};
+          return ConversationScreen(
+            conversationId: state.pathParameters['conversationId']!,
+            otherUserId: extras['otherUserId'] as String? ?? '',
+            otherUsername: extras['otherUsername'] as String? ?? 'Chat',
+            otherAvatarUrl: extras['otherAvatarUrl'] as String?,
+          );
+        },
       ),
       GoRoute(
         path: '/posts/:postId',

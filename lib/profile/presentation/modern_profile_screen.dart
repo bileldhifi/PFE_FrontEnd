@@ -6,6 +6,7 @@ import 'package:travel_diary_frontend/auth/presentation/controllers/auth_control
 import 'package:travel_diary_frontend/core/data/fake_data.dart';
 import 'package:travel_diary_frontend/core/widgets/app_avatar.dart';
 import 'package:travel_diary_frontend/core/utils/color_extractor.dart';
+import 'package:travel_diary_frontend/profile/presentation/controllers/profile_travel_stats_provider.dart';
 import 'controllers/profile_controller.dart';
 
 class ModernProfileScreen extends ConsumerStatefulWidget {
@@ -22,7 +23,6 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
   late Animation<Offset> _slideAnimation;
   
   // Dynamic color state
-  List<Color> _extractedColors = [];
   LinearGradient _currentGradient = const LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -96,7 +96,6 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
         
         if (mounted && colors.isNotEmpty) {
           setState(() {
-            _extractedColors = colors;
             _currentGradient = ColorExtractor.createComplementaryGradient(colors);
             _isExtractingColors = false;
           });
@@ -326,162 +325,115 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
   }
 
   Widget _buildStatsSection(user) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          // Main stats row
-          Row(
-            children: [
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Trips',
-                  '12',
-                  '+2 this month',
-                  Icons.luggage,
-                  AppColors.primaryLight,
-                  () => _showTripsDetail(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Posts',
-                  '48',
-                  '+8 this week',
-                  Icons.article,
-                  AppColors.secondaryLight,
-                  () => _showPostsDetail(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Followers',
-                  '1.2K',
-                  '+15 new',
-                  Icons.people,
-                  Colors.orange,
-                  () => _showFollowersDetail(),
-                ),
-              ),
-            ],
+    return Consumer(
+      builder: (context, ref, _) {
+        final statsAsync = ref.watch(profileTravelStatsProvider(user.id));
+        return statsAsync.when(
+          loading: () => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Row(
+              children: [
+                const Expanded(child: _StatsSkeleton()),
+                const SizedBox(width: 16),
+                const Expanded(child: _StatsSkeleton()),
+                const SizedBox(width: 16),
+                const Expanded(child: _StatsSkeleton()),
+              ],
+            ),
           ),
-          
-          const SizedBox(height: 16),
-          
-          // Additional stats row
-          Row(
-            children: [
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Countries',
-                  '8',
-                  '5 continents',
-                  Icons.public,
-                  Colors.green,
-                  () => _showCountriesDetail(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Distance',
-                  '24.5K',
-                  'km traveled',
-                  Icons.straighten,
-                  Colors.purple,
-                  () => _showDistanceDetail(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildEnhancedStatCard(
-                  'Photos',
-                  '156',
-                  '+12 today',
-                  Icons.photo_camera,
-                  Colors.teal,
-                  () => _showPhotosDetail(),
-                ),
-              ),
-            ],
+          error: (e, __) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(
+              'Failed to load stats',
+              style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.w600),
+            ),
           ),
-        ],
-      ),
+          data: (stats) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Trips',
+                          _formatInt(stats.tripsCount),
+                          Icons.luggage,
+                          AppColors.primaryLight,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Posts',
+                          _formatInt(stats.postsCount),
+                          Icons.article,
+                          AppColors.secondaryLight,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Followers',
+                          _formatInt(user.followersCount),
+                          Icons.people,
+                          Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Countries',
+                          _formatInt(stats.countriesVisited),
+                          Icons.public,
+                          Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Distance',
+                          _formatDistance(stats.totalDistanceKm),
+                          Icons.straighten,
+                          Colors.purple,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildSimpleStatCard(
+                          'Photos',
+                          _formatInt(stats.photosCount),
+                          Icons.photo_camera,
+                          Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildEnhancedStatCard(String title, String value, String subtitle, IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(
-            color: color.withOpacity(0.1),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 20,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 10,
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  String _formatInt(int value) => value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}K' : '$value';
+  String _formatDistance(double km) =>
+      km >= 1000 ? '${(km / 1000).toStringAsFixed(1)}k km' : '${km.toStringAsFixed(1)} km';
+  String _formatJoinDate(DateTime date) {
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${months[date.month - 1]} ${date.year}';
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSimpleStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -492,26 +444,26 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
             offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(
+          color: color.withOpacity(0.12),
+          width: 1,
+        ),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 24,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 12),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
@@ -520,15 +472,88 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
           Text(
             title,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
       ),
     );
   }
+
+  // Lightweight skeleton while loading stats
+  static const _skeletonRadius = 12.0;
+  static const _skeletonColor = Color(0xFFF1F3F5);
+  static const _skeletonBorder = Color(0xFFE9ECEF);
+  static const _skeletonShadow = 0.05;
+
+  // ignore: unused_element
+  Widget _skeletonBox({double height = 18, double radius = _skeletonRadius}) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: _skeletonColor,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: _skeletonBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(_skeletonShadow),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  Widget _iconSkeleton() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: _skeletonColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _skeletonBorder),
+      ),
+    );
+  }
+
+  // Simple placeholder card during loading
+  // ignore: unused_element
+  Widget _loadingCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _skeletonBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _iconSkeleton(),
+          const SizedBox(height: 12),
+          _skeletonBox(height: 20),
+          const SizedBox(height: 6),
+          _skeletonBox(height: 14),
+        ],
+      ),
+    );
+  }
+
+  // Visible skeleton row widget
+  // ignore: unused_element
+  // skeleton instance kept local where needed
+
+  // Removed old clickable stat card
 
   Widget _buildQuickActionsSection() {
     return Padding(
@@ -1065,14 +1090,6 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
     );
   }
 
-  String _formatJoinDate(DateTime date) {
-    final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[date.month - 1]} ${date.year}';
-  }
-
   String _formatVisibility(String visibility) {
     switch (visibility.toUpperCase()) {
       case 'PUBLIC':
@@ -1113,7 +1130,6 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
   }
 
   void _shareProfile() {
-    // Implement share functionality
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Share profile functionality coming soon!'),
@@ -1122,224 +1138,54 @@ class _ModernProfileScreenState extends ConsumerState<ModernProfileScreen>
     );
   }
 
-  void _showTripsDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Trip Statistics',
-        Icons.luggage,
-        AppColors.primaryLight,
-        [
-          'Total Trips: 12',
-          'Active Trips: 2',
-          'Completed Trips: 10',
-          'Favorite Destination: Paris',
-          'Total Distance: 24,500 km',
-          'Average Trip Duration: 7 days',
-        ],
-      ),
-    );
-  }
+}
 
-  void _showPostsDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Post Statistics',
-        Icons.article,
-        AppColors.secondaryLight,
-        [
-          'Total Posts: 48',
-          'This Month: 8',
-          'This Week: 3',
-          'Most Liked: "Sunset in Rome"',
-          'Average Likes: 24',
-          'Total Comments: 156',
-        ],
-      ),
-    );
-  }
+class _StatsSkeleton extends StatelessWidget {
+  const _StatsSkeleton();
 
-  void _showFollowersDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Follower Statistics',
-        Icons.people,
-        Colors.orange,
-        [
-          'Total Followers: 1,234',
-          'New This Month: 15',
-          'New This Week: 3',
-          'Top Countries: US, UK, Canada',
-          'Engagement Rate: 4.2%',
-          'Active Followers: 89%',
-        ],
-      ),
-    );
-  }
-
-  void _showCountriesDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Travel Statistics',
-        Icons.public,
-        Colors.green,
-        [
-          'Countries Visited: 8',
-          'Continents: 5',
-          'Favorite: France',
-          'Most Recent: Japan',
-          'Next Destination: Australia',
-          'Travel Score: 85/100',
-        ],
-      ),
-    );
-  }
-
-  void _showDistanceDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Distance Statistics',
-        Icons.straighten,
-        Colors.purple,
-        [
-          'Total Distance: 24,500 km',
-          'This Year: 8,200 km',
-          'This Month: 1,500 km',
-          'Average per Trip: 2,040 km',
-          'Longest Trip: 4,500 km',
-          'Transportation: 60% Flight, 40% Road',
-        ],
-      ),
-    );
-  }
-
-  void _showPhotosDetail() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildDetailModal(
-        'Photo Statistics',
-        Icons.photo_camera,
-        Colors.teal,
-        [
-          'Total Photos: 156',
-          'This Month: 24',
-          'This Week: 8',
-          'Today: 3',
-          'Storage Used: 2.3 GB',
-          'Most Popular: Landscapes',
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailModal(String title, IconData icon, Color color, List<String> details) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.6,
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE9ECEF)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          // Handle bar
           Container(
-            margin: const EdgeInsets.only(top: 12),
             width: 40,
-            height: 4,
+            height: 40,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
+              color: const Color(0xFFF1F3F5),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE9ECEF)),
             ),
           ),
-          
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 12),
+          Container(
+            height: 20,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F3F5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE9ECEF)),
             ),
           ),
-          
-          // Details list
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: details.length,
-              itemBuilder: (context, index) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.grey[200]!,
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          details[index],
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+          const SizedBox(height: 6),
+          Container(
+            height: 14,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F3F5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE9ECEF)),
             ),
           ),
         ],
