@@ -4,6 +4,8 @@ import 'package:travel_diary_frontend/auth/presentation/forgot_password_screen.d
 import 'package:travel_diary_frontend/auth/presentation/login_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/register_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/change_password_screen.dart';
+import 'package:travel_diary_frontend/auth/presentation/reset_password_screen.dart';
+import 'package:travel_diary_frontend/auth/presentation/verify_reset_code_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/feed_screen.dart';
 import 'package:travel_diary_frontend/feed/presentation/screens/post_detail_screen.dart';
 import 'package:travel_diary_frontend/home/presentation/home_screen.dart';
@@ -17,7 +19,6 @@ import 'package:travel_diary_frontend/settings/presentation/settings_screen.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel_diary_frontend/app/splash_screen.dart';
 import 'package:travel_diary_frontend/auth/presentation/controllers/auth_controller.dart';
-import 'package:travel_diary_frontend/profile/presentation/controllers/profile_controller.dart';
 import 'package:travel_diary_frontend/messages/presentation/screens/conversation_list_screen.dart';
 import 'package:travel_diary_frontend/messages/presentation/screens/conversation_screen.dart';
 import 'package:travel_diary_frontend/trips/presentation/create_trip_screen.dart';
@@ -57,6 +58,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/auth/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/auth/verify-reset-code',
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'];
+          return VerifyResetCodeScreen(initialEmail: email);
+        },
+      ),
+      GoRoute(
+        path: '/auth/reset-password',
+        builder: (context, state) {
+          final token = state.uri.queryParameters['token'] ?? '';
+          return ResetPasswordScreen(token: token);
+        },
       ),
       GoRoute(
         path: '/auth/change-password',

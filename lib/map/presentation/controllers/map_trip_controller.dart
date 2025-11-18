@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../data/trip_route_repository.dart';
@@ -114,10 +114,33 @@ class MapTripController {
       }
       _currentMarkers.clear();
       
-      // Redraw all track points with media indicators
+      // Redraw all track points with media indicators AND start/end markers
       for (final trip in trips) {
         final points = trackPoints[trip.id] ?? [];
         
+        if (points.isNotEmpty) {
+          // Add START marker for this trip - using image-based approach
+          final startPoint = points[0];
+          await _addStartEndMarkerImage(
+            startPoint,
+            'START',
+            const ui.Color(0xFF4CAF50), // Green
+            'start_${trip.id}',
+          );
+          
+          // Add END marker only if trip has ended and there's more than one point
+          if (trip.endDate != null && points.length > 1) {
+            final endPoint = points[points.length - 1];
+            await _addStartEndMarkerImage(
+              endPoint,
+              'END',
+              const ui.Color(0xFFF44336), // Red
+              'end_${trip.id}',
+            );
+          }
+        }
+        
+        // Add media markers
         for (int i = 0; i < points.length; i++) {
           final point = points[i];
           final hasMedia = _trackPointsWithMedia.contains(point.id);
@@ -285,9 +308,108 @@ class MapTripController {
   Future<void> _addTripMarkers(Trip trip, List<TrackPoint> trackPoints, int color) async {
     if (trackPoints.isEmpty) return;
 
-    // SIMPLIFIED: Skip start/end/track point markers for now
-    // Focus only on media markers (Snapchat feature)
-    print('Skipping start/end markers - will only show media markers');
+    try {
+      // Add starting point marker - using image-based approach
+      final startPoint = trackPoints[0];
+      await _addStartEndMarkerImage(
+        startPoint,
+        'START',
+        const ui.Color(0xFF4CAF50), // Green
+        'start_${trip.id}',
+      );
+      print('Added START marker for trip ${trip.id} at ${startPoint.latitude}, ${startPoint.longitude}');
+      
+      // Add ending point marker only if trip has ended and there's more than one point
+      if (trip.endDate != null && trackPoints.length > 1) {
+        final endPoint = trackPoints[trackPoints.length - 1];
+        await _addStartEndMarkerImage(
+          endPoint,
+          'END',
+          const ui.Color(0xFFF44336), // Red
+          'end_${trip.id}',
+        );
+        print('Added END marker for trip ${trip.id} at ${endPoint.latitude}, ${endPoint.longitude}');
+      }
+    } catch (e) {
+      print('Error adding trip markers for ${trip.id}: $e');
+      print('Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  /// Helper method to add start/end marker using image-based approach
+  Future<void> _addStartEndMarkerImage(
+    TrackPoint point,
+    String text,
+    ui.Color backgroundColor,
+    String imageId,
+  ) async {
+    try {
+      // Determine gradient colors based on text
+      ui.Color startColor;
+      ui.Color endColor;
+      
+      if (text == 'START') {
+        startColor = const ui.Color(0xFF42A5F5); // Light blue
+        endColor = const ui.Color(0xFF1976D2); // Darker blue
+      } else if (text == 'END') {
+        startColor = const ui.Color(0xFFEF5350); // Light red/pink
+        endColor = const ui.Color(0xFFC62828); // Darker red
+      } else {
+        startColor = backgroundColor;
+        endColor = backgroundColor;
+      }
+      
+      // Create marker with gradient background badge
+      final imageBytes = await createTextCircleMarker(
+        text: text,
+        icon: null, // No icon
+        size: 75, // Good size
+        backgroundColor: startColor, // Gradient start
+        gradientColor: endColor, // Gradient end
+        textColor: const ui.Color(0xFFFFFFFF), // White text
+        borderWidth: 2, // White border
+        borderColor: const ui.Color(0xFFFFFFFF),
+        hasShadow: true, // Shadow for depth
+      );
+
+      // Create MbxImage from bytes
+      final mbxImage = MbxImage(
+        width: 75,
+        height: 75,
+        data: imageBytes,
+      );
+
+      // Add image to map style
+      await _mapboxMap.style.addStyleImage(
+        imageId,
+        1.0, // scale
+        mbxImage,
+        false, // sdf
+        [], // stretchX
+        [], // stretchY
+        null, // content
+      );
+
+      // Create point annotation with the image
+      final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
+      
+      await pointManager.create(
+        PointAnnotationOptions(
+          geometry: Point(
+            coordinates: Position(point.longitude, point.latitude),
+          ),
+          iconImage: imageId,
+          iconSize: 1.0, // Clean size
+          iconAnchor: IconAnchor.CENTER,
+        ),
+      );
+
+      // Store manager for cleanup
+      _currentMarkers.add(pointManager);
+    } catch (e) {
+      print('Error creating start/end marker: $e');
+      rethrow;
+    }
   }
 
   /// Add individual track point markers along the route
@@ -401,10 +523,32 @@ class MapTripController {
     
     int markersAdded = 0;
     
+    // Add starting point marker first (always visible)
+    if (trackPoints.isNotEmpty) {
+      final startPoint = trackPoints[0];
+      try {
+        await pointManager.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(startPoint.longitude, startPoint.latitude)),
+            textField: 'START', // Text label for starting point
+            textSize: 14,
+            textColor: 0xFFFFFFFF, // White text
+            textHaloColor: 0xFF4CAF50, // Green halo
+            textHaloWidth: 3.0,
+            textOffset: [0.0, -1.0], // Offset to position above point
+          ),
+        );
+        markersAdded++;
+        print('Added starting point marker for trip ${trip.id}');
+      } catch (e) {
+        print('Error creating start marker: $e');
+      }
+    }
+    
     for (int i = 0; i < trackPoints.length; i += stepSize) {
       final trackPoint = trackPoints[i];
       
-      // Skip start and end points
+      // Skip start (already added) and end points
       if (i == 0 || i == trackPoints.length - 1) continue;
       
       final markerId = 'trip_${trip.id}_${density}_$i';
@@ -509,6 +653,28 @@ class MapTripController {
   Future<void> addAllTrackPointMarkers(Trip trip, List<TrackPoint> trackPoints, int color) async {
     if (trackPoints.isEmpty) return;
     
+    // Create a separate manager for the starting point marker to ensure visibility
+    final startPointManager = await _mapboxMap.annotations.createPointAnnotationManager();
+    final startPoint = trackPoints[0];
+    
+    try {
+      await startPointManager.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(startPoint.longitude, startPoint.latitude)),
+          textField: 'START', // Text label for starting point
+          textSize: 14, // Size for text
+          textColor: 0xFFFFFFFF, // White text
+          textHaloColor: 0xFF4CAF50, // Green halo
+          textHaloWidth: 3.0, // Halo width for visibility
+          textOffset: [0.0, -1.0], // Offset to position above point
+        ),
+      );
+      _currentMarkers.add(startPointManager);
+      print('Added starting point marker for trip ${trip.id} at ${startPoint.latitude}, ${startPoint.longitude}');
+    } catch (e) {
+      print('Error creating start marker: $e');
+    }
+    
     final pointManager = await _mapboxMap.annotations.createPointAnnotationManager();
     print('Adding ALL track point markers for trip ${trip.id}: ${trackPoints.length} points');
     
@@ -516,6 +682,9 @@ class MapTripController {
     
     for (int i = 0; i < trackPoints.length; i++) {
       final trackPoint = trackPoints[i];
+      
+      // Skip the first point as we already added it as a special starting marker
+      if (i == 0) continue;
       
       final markerId = 'trip_${trip.id}_all_$i';
       try {
@@ -527,13 +696,7 @@ class MapTripController {
         double haloWidth;
         
         // Different styles based on position
-        if (i == 0) {
-          markerIcon = '🚀'; // Start marker
-          markerSize = 1.5;
-          textSize = 14;
-          haloColor = 0xFF4CAF50; // Green
-          haloWidth = 4.0;
-        } else if (i == trackPoints.length - 1) {
+        if (i == trackPoints.length - 1) {
           markerIcon = '🏁'; // End marker
           markerSize = 1.5;
           textSize = 14;

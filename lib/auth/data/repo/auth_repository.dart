@@ -3,7 +3,6 @@ import '../../../../core/network/network_service.dart';
 import '../dtos/login_request.dart';
 import '../dtos/auth_response.dart';
 import '../dtos/register_request.dart';
-import '../dtos/forgot_password_request.dart';
 import '../dtos/change_password_request.dart';
 import '../models/user.dart';
 
@@ -124,6 +123,25 @@ class AuthRepository {
           error: 'Failed to reset password',
         );
       }
+    } on DioException catch (e) {
+      throw _handleAuthError(e);
+    }
+  }
+
+  /// Verify reset code and return reset token
+  Future<String> verifyResetCode(String email, String code) async {
+    try {
+      final response = await _apiClient.post<String>(
+        '/auth/verify-reset-code',
+        queryParameters: {'email': email, 'code': code},
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return response.data!;
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        error: 'Failed to verify code',
+      );
     } on DioException catch (e) {
       throw _handleAuthError(e);
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel_diary_frontend/core/utils/validators.dart';
 import 'package:travel_diary_frontend/core/widgets/app_text_field.dart';
+import 'package:travel_diary_frontend/auth/data/repo/auth_repository.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -15,6 +16,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
   bool _emailSent = false;
+  String? _error;
 
   @override
   void dispose() {
@@ -26,15 +28,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() {
         _isLoading = true;
+        _error = null;
       });
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final repo = AuthRepository();
+        await repo.forgotPassword(_emailController.text.trim());
 
-      setState(() {
-        _isLoading = false;
-        _emailSent = true;
-      });
+        setState(() {
+          _isLoading = false;
+        });
+        if (!mounted) return;
+        final email = Uri.encodeComponent(_emailController.text.trim());
+        context.go('/auth/verify-reset-code?email=$email');
+        return;
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+          _error = e.toString();
+        });
+      }
     }
   }
 
@@ -131,6 +144,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           
           const SizedBox(height: 16),
           
+          // No inline code flow; we navigate after sending the reset link
+          
+          if (_error != null) ...[
+            SelectableText(
+              _error!,
+              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+          ],
+          
           // Back to login
           TextButton(
             onPressed: () => context.pop(),
@@ -203,13 +227,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         
         const SizedBox(height: 32),
-        
-        OutlinedButton(
-          onPressed: () => context.pop(),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(56),
-          ),
-          child: const Text('Back to Login'),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () => context.pop(),
+              child: const Text('Back to Login'),
+            ),
+            const SizedBox(width: 12),
+          ],
         ),
       ],
     );
