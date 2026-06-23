@@ -42,7 +42,6 @@ lib/
 - **Routing**: GoRouter
 - **HTTP**: Dio
 - **Code Generation**: Freezed + json_serializable
-- **Local DB**: Drift (SQLite)
 - **Storage**: flutter_secure_storage, shared_preferences
 - **UI**: Material 3 with custom theme
 - **Images**: cached_network_image
@@ -160,14 +159,6 @@ flutter pub run build_runner build --delete-conflicting-outputs
 - `lib/app/theme/` - Theme configuration
 - `lib/core/data/fake_data.dart` - Mock data for testing
 
-## 🌐 Backend Integration
-
-Currently uses fake data. To connect to a real backend:
-
-1. Update the base URL in `lib/core/env/env.dart`
-2. Implement API clients in `data/sources/` folders
-3. Update repositories to use real data sources
-4. Remove fake data providers
 
 ## 🤝 Contributing
 
@@ -177,16 +168,6 @@ This is a frontend demo application showcasing best practices in Flutter develop
 
 This project is for demonstration purposes.
 
-## 🎯 Future Enhancements
-
-- [ ] Real backend integration
-- [ ] Offline-first with Drift sync
-- [ ] Google Maps integration
-- [ ] Photo filters and editing
-- [ ] Social features (comments, likes)
-- [ ] Push notifications
-- [ ] Multi-language support
-- [ ] Analytics integration
 
 ---
 
