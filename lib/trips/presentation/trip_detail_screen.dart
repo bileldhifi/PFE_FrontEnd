@@ -369,15 +369,6 @@ class TripDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Add step coming soon!')),
-            );
-          },
-          icon: const Icon(Icons.add),
-          label: const Text('Add Step'),
-        ),
       ),
     );
   }

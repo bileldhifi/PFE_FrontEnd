@@ -304,9 +304,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
             const SizedBox(height: 24),
 
-            // Info card
-            const _InfoCard(),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -669,44 +666,6 @@ class _CaptionSection extends StatelessWidget {
                   color: Colors.blue,
                   width: 2,
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Info card widget
-class _InfoCard extends StatelessWidget {
-  const _InfoCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.amber[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber[200]!, width: 1),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            color: Colors.amber[700],
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Backend API for post creation not yet implemented. '
-              'This is a preview of the UI and image picker functionality.',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.amber[900],
               ),
             ),
           ),
